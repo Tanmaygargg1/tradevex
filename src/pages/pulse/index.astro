@@ -192,10 +192,7 @@ import Base from '../../layouts/Base.astro';
 
   <style>
     @media (max-width: 640px) {
-      #pulse-chart { height: 280px !important; }
-      #ir-levels   { grid-template-columns: repeat(2, 1fr) !important; }
-      .hero        { padding: 40px 0 32px; }
-      .hero__title { margin-bottom: 12px; }
+      #ir-levels { grid-template-columns: repeat(2, 1fr) !important; }
     }
   </style>
 
@@ -344,8 +341,9 @@ function computeEMA(closes, dates, period) {
     const el = document.getElementById('pulse-chart');
     if (pulseChart) { pulseChart.remove(); pulseChart = null; }
     document.getElementById('chart-placeholder').style.display = 'none';
+    const chartH = window.innerWidth < 640 ? 260 : 480;
     pulseChart = LightweightCharts.createChart(el, {
-      width: el.clientWidth, height: 480,
+      width: el.clientWidth, height: chartH,
       layout: { background: { type: 'solid', color: '#111113' }, textColor: '#6b6b78', fontSize: 11 },
       grid: { vertLines: { color: '#1a1a1e' }, horzLines: { color: '#1a1a1e' } },
       rightPriceScale: { borderColor: '#222226' },

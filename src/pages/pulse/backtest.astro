@@ -110,13 +110,6 @@ import Base from '../../layouts/Base.astro';
     </div>
   </section>
 
-  <style>
-    @media (max-width: 640px) {
-      #bt-chart { height: 260px !important; }
-      #eq-chart  { height: 110px !important; }
-    }
-  </style>
-
   <script is:inline src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.4/dist/lightweight-charts.standalone.production.js"></script>
   <script is:inline>
 
@@ -320,10 +313,11 @@ import Base from '../../layouts/Base.astro';
   let btChart = null, eqChart = null;
 
   function renderCharts(candles, result) {
+    const isMobile = window.innerWidth < 640;
     const btEl = document.getElementById('bt-chart');
     if (btChart) { btChart.remove(); btChart = null; }
     btChart = LightweightCharts.createChart(btEl, {
-      width: btEl.clientWidth, height: 420,
+      width: btEl.clientWidth, height: isMobile ? 240 : 420,
       layout: { background: { type: 'solid', color: '#111113' }, textColor: '#6b6b78', fontSize: 11 },
       grid: { vertLines: { color: '#1a1a1e' }, horzLines: { color: '#1a1a1e' } },
       rightPriceScale: { borderColor: '#222226' },
@@ -342,7 +336,7 @@ import Base from '../../layouts/Base.astro';
     const eqEl = document.getElementById('eq-chart');
     if (eqChart) { eqChart.remove(); eqChart = null; }
     eqChart = LightweightCharts.createChart(eqEl, {
-      width: eqEl.clientWidth, height: 160,
+      width: eqEl.clientWidth, height: isMobile ? 100 : 160,
       layout: { background: { type: 'solid', color: '#111113' }, textColor: '#6b6b78', fontSize: 10 },
       grid: { vertLines: { color: '#1a1a1e' }, horzLines: { color: '#1a1a1e' } },
       rightPriceScale: { borderColor: '#222226' },
@@ -356,6 +350,7 @@ import Base from '../../layouts/Base.astro';
 
   function renderStrategyAnalysis(metrics, trades) {
     const m = metrics;
+    const cols = window.innerWidth < 640 ? '1fr' : '1fr 1fr';
     const closed = trades.filter(t => !t.open);
     const bestTrade  = closed.length ? closed.reduce((b,t) => t.returnPct > b.returnPct ? t : b) : null;
     const worstTrade = closed.length ? closed.reduce((b,t) => t.returnPct < b.returnPct ? t : b) : null;
@@ -386,7 +381,7 @@ import Base from '../../layouts/Base.astro';
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+      <div style="display:grid;grid-template-columns:${cols};gap:16px;margin-bottom:20px">
         <div style="padding:16px;background:var(--bg);border:1px solid var(--border);border-radius:4px">
           <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:10px">Win / Loss Breakdown</div>
           <div style="display:flex;flex-direction:column;gap:6px;font-size:0.82rem;color:var(--muted)">
@@ -409,7 +404,7 @@ import Base from '../../layouts/Base.astro';
       </div>
 
       ${bestTrade || worstTrade ? `
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div style="display:grid;grid-template-columns:${cols};gap:16px">
         ${bestTrade ? `<div style="padding:16px;background:rgba(0,255,68,0.05);border:1px solid rgba(0,255,68,0.2);border-radius:4px">
           <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:8px">Best Trade</div>
           <div style="font-size:1.4rem;font-weight:700;color:#00ff44;margin-bottom:4px">${pct(bestTrade.returnPct,2)}</div>

@@ -463,9 +463,18 @@ code, pre {
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 
 @media (max-width: 768px) {
+  /* ── Base ── */
+  body { font-size: 16px; }
+
+  /* Prevent iOS Safari from zooming on input focus */
+  input, select, textarea { font-size: 16px !important; }
+
+  /* ── Layout ── */
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
   .pulse-overlay { display: none; }
+  .container { padding: 0 16px; }
 
+  /* ── Nav ── */
   .nav__hamburger { display: flex; }
 
   .nav__links {
@@ -485,61 +494,92 @@ code, pre {
   }
 
   .nav__links.open { display: flex; }
-
   .nav__links li { width: 100%; }
 
   .nav__links a {
     display: block;
-    padding: 14px 24px;
-    font-size: 0.88rem;
+    padding: 16px 24px;
+    font-size: 1rem;
     border-bottom: 1px solid var(--border);
   }
 
   .nav__links li:last-child a { border-bottom: none; }
 
-  /* Hub page */
-  .hub-hero { padding: 56px 0 44px; }
-  .hub-signals { padding: 44px 0 64px; }
-  .hub-sub { font-size: 1rem; }
+  /* ── Hub page ── */
+  .hub-hero { padding: 48px 0 36px; }
+  .hub-signals { padding: 36px 0 56px; }
+  .hub-sub { font-size: 0.95rem; }
+  .hub-card { padding: 20px; }
+  .hub-card h3 { font-size: 1.05rem; }
+  .hub-card p { font-size: 0.85rem; }
 
-  /* Factor bar — tighten label column */
-  .factor-bar { grid-template-columns: 90px 1fr 40px; gap: 8px; }
-  .factor-bar__label { font-size: 0.72rem; }
+  /* ── Hero section ── */
+  .hero { padding: 36px 0 28px; }
+  .hero__title { margin-bottom: 10px; }
+  .hero__desc { font-size: 0.9rem; }
 
-  /* Score display */
-  .score-display__num { font-size: 3.5rem; }
-
-  /* Search — full width */
+  /* ── Search ── */
   .search-wrap { max-width: 100%; }
+  .search-input { padding: 12px 14px; font-size: 1rem; }
+  .btn { padding: 11px 18px; }
 
-  /* Raw data table */
-  .raw-data-table td:first-child { width: 120px; font-size: 0.7rem; }
+  /* ── Stat chips ── */
+  .stat-chip { min-width: 130px; padding: 12px 14px; }
+  .stat-chip__label { font-size: 0.8rem; }
+  .stat-chip__value { font-size: 1rem; }
 
-  /* Backtest controls */
-  .bt-controls { padding: 16px; gap: 10px; }
-  .bt-field input, .bt-field select { min-width: 80px; }
-  .metric-grid { grid-template-columns: repeat(2, 1fr); }
+  /* ── Score display ── */
+  .score-display__num { font-size: 3.2rem; }
+  .score-display { padding: 20px 16px; }
 
-  /* Trade log */
-  .trade-log { font-size: 0.72rem; }
-  .trade-log th, .trade-log td { padding: 6px 6px; }
+  /* ── Factor bars ── */
+  .factor-bar { grid-template-columns: 86px 1fr 36px; gap: 8px; }
+  .factor-bar__label { font-size: 0.75rem; }
 
-  /* Docs tables — horizontal scroll */
+  /* ── Factor step cards ── */
+  .factor-step__mini-bar-wrap { width: 60px; }
+  .factor-step__header { padding: 14px 16px; gap: 10px; }
+  .factor-step__num { font-size: 1.2rem; min-width: 28px; }
+  .factor-step__name { font-size: 0.88rem; }
+  .factor-step__score-pill { font-size: 0.82rem; min-width: 46px; }
+  .factor-step__data-grid { grid-template-columns: repeat(2, 1fr); }
+
+  /* ── Raw data table ── */
+  .raw-data-table td:first-child { width: 110px; font-size: 0.78rem; }
+  .raw-data-table td { font-size: 0.85rem; padding: 7px 10px; }
+
+  /* ── Backtest controls — stack vertically ── */
+  .bt-controls { flex-direction: column; padding: 16px; gap: 12px; }
+  .bt-field { width: 100%; }
+  .bt-field input, .bt-field select { width: 100% !important; min-width: unset; box-sizing: border-box; }
+  .bt-field:last-child { margin-top: 4px; }
+  .bt-field:last-child .btn { width: 100%; justify-content: center; }
+
+  /* ── Metric cards (backtest) ── */
+  .metric-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .metric-card { padding: 14px 12px; }
+  .metric-card__label { font-size: 0.72rem; }
+  .metric-card__value { font-size: 1.5rem; }
+  .metric-card__sub { font-size: 0.7rem; }
+
+  /* ── Trade log ── */
+  .trade-log { font-size: 0.8rem; }
+  .trade-log th { font-size: 0.68rem; padding: 6px 7px; letter-spacing: 0; }
+  .trade-log td { padding: 7px 7px; }
+
+  /* ── Docs tables ── */
   .docs-content table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .docs-content table td:first-child { white-space: normal; }
+  .docs-formula { font-size: 0.8rem; }
 
-  /* Docs formula — smaller font */
-  .docs-formula { font-size: 0.74rem; }
-
-  /* Factor step mini bar — narrower */
-  .factor-step__mini-bar-wrap { width: 80px; }
-
-  /* Stat chip row wrapping */
-  .stat-chip { min-width: 110px; }
-
-  /* Report CTA stack on mobile */
+  /* ── Report CTA ── */
   .report-cta { flex-direction: column; align-items: stretch; }
   .report-cta .btn { text-align: center; justify-content: center; }
+
+  /* ── MA controls ── */
+  .ma-controls { padding: 10px 12px; gap: 8px; }
+  .ma-controls__label { font-size: 0.72rem; }
+  .ma-controls__input { width: 52px; font-size: 0.85rem; }
 }
 
 /* ── Error / empty states ──────────────────────────── */
