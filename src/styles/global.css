@@ -1255,6 +1255,7 @@ code, pre {
 .docs-content {
   padding: 48px 56px 80px;
   max-width: 780px;
+  min-width: 0;
 }
 
 @media (max-width: 780px) {
@@ -1262,7 +1263,8 @@ code, pre {
   .docs-content h2 { font-size: 1.3rem; margin-top: 40px; }
   .docs-content h3 { font-size: 1rem; }
   .docs-content p, .docs-content ul, .docs-content ol { font-size: 0.95rem; line-height: 1.8; }
-  .docs-content table { font-size: 0.82rem; }
+  .docs-content table { font-size: 0.82rem; display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .docs-content table td:first-child { white-space: normal; }
   .docs-content table td, .docs-content table th { padding: 8px 10px; }
 
   /* Docs nav toggle — readable size */
