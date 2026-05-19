@@ -6,101 +6,148 @@ indicator(
      max_labels_count = 500
      )
 
-// ── Inputs ─────────────────────────────────────────────────────
-fast_len     = input.int(10, minval=2,  maxval=200, title="Fast MA",  group="Moving averages")
-slow_len     = input.int(30, minval=5,  maxval=500, title="Slow MA",  group="Moving averages")
-ma_type      = input.string("SMA", options=["SMA","EMA"],             title="MA type", group="Moving averages")
-vol_mult     = input.float(2.0, minval=1.0, maxval=5.0, step=0.1,    title="Volume surge threshold (×avg)", group="Filters")
-show_labels  = input.bool(true,  title="Show BUY / SELL labels",      group="Visuals")
-show_shading = input.bool(true,  title="Shade background",            group="Visuals")
-show_table   = input.bool(true,  title="Show dashboard",              group="Visuals")
+// ── Inputs ─────────────────────────────────────────────────────────────────
+fast_len          = input.int(8,  minval=2, maxval=200, title="Fast EMA",        group="Moving Averages")
+slow_len          = input.int(21, minval=5, maxval=500, title="Slow EMA",        group="Moving Averages")
+ma_type           = input.string("EMA", options=["EMA","SMA"], title="MA type",  group="Moving Averages")
 
-// ── Calculations ────────────────────────────────────────────────
+earnings_surprise = input.float(0.0, minval=0.0, maxval=100.0, step=0.5,
+                                title="Earnings surprise % (EPS beat vs estimate — 0 if no recent data)",
+                                group="Factor 5 — Earnings Surprise")
+
+apply_filters     = input.bool(true,
+                                title="Apply BUY filters: 50d EMA trend + RSI ≥ 35 (matches backtest logic)",
+                                group="Signal Filters")
+
+show_labels       = input.bool(true,  title="Show BUY / SELL labels",   group="Visuals")
+show_shading      = input.bool(true,  title="Shade background by trend", group="Visuals")
+show_table        = input.bool(true,  title="Show Pulse dashboard",      group="Visuals")
+
+// ── Moving averages ─────────────────────────────────────────────────────────
 fast_ma = ma_type == "EMA" ? ta.ema(close, fast_len) : ta.sma(close, fast_len)
 slow_ma = ma_type == "EMA" ? ta.ema(close, slow_len) : ta.sma(close, slow_len)
+ema_50  = ta.ema(close, 50)
 
-avg_vol     = ta.sma(volume, 20)
-vol_surge   = volume > avg_vol * vol_mult
+// ── Factor 1 — Momentum (0–20) ──────────────────────────────────────────────
+// % above 20-day SMA × 2; 10% above = 20 pts, below SMA = 0
+sma_20     = ta.sma(close, 20)
+pct_above  = (close - sma_20) / sma_20 * 100
+s_momentum = math.min(math.max(pct_above * 2.0, 0.0), 20.0)
 
+// ── Factor 2 — Volume Surge (0–20) ─────────────────────────────────────────
+// (today_vol / 20d_avg − 1) × 10; 3× average = 20 pts, below average = 0
+avg_vol_20  = ta.sma(volume, 20)
+surge_ratio = avg_vol_20 > 0 ? volume / avg_vol_20 : 1.0
+s_volume    = math.min(math.max((surge_ratio - 1.0) * 10.0, 0.0), 20.0)
+
+// ── Factor 3 — Trend Consistency (0–20) ────────────────────────────────────
+// Green closes (close > open) out of last 10 sessions × 20
 up_count = 0
 for i = 0 to 9
     if close[i] > open[i]
         up_count += 1
-consistency = up_count / 10.0
+s_consist = up_count / 10.0 * 20.0
 
-atr_20      = ta.atr(20)
-ret_5d      = (close - close[5]) / close[5] * 100
-avg_range   = atr_20 / close * 100
-vol_adj_str = avg_range > 0 ? ret_5d / avg_range : 0
+// ── Factor 4 — RSI Quality (0–20) ──────────────────────────────────────────
+// Ideal zone 55–75 = 20 pts; >80 = 0 pts; <40 = 0 pts; tapers in between
+rsi_14 = ta.rsi(close, 14)
+s_rsi  = rsi_14 > 80  ? 0.0 :
+         rsi_14 >= 75 ? math.max((80.0 - rsi_14) / 5.0 * 20.0, 0.0) :
+         rsi_14 >= 55 ? 20.0 :
+         rsi_14 >= 40 ? (rsi_14 - 40.0) / 15.0 * 20.0 :
+         0.0
 
-momentum    = (close - ta.sma(close, 20)) / ta.sma(close, 20) * 100
+// ── Factor 5 — Earnings Surprise (0–20) ────────────────────────────────────
+// EPS beat % × 1.5; a 13.3% beat = 20 pts.
+// Pine Script cannot fetch earnings data — enter the beat % manually after
+// each earnings release and reset to 0 when the data is ~60-90 days stale.
+s_earnings = math.min(math.max(earnings_surprise * 1.5, 0.0), 20.0)
 
-// ── Score components (each 0–20) ────────────────────────────────
-s_momentum  = math.min(math.max(momentum * 2, 0), 20)
-s_volume    = vol_surge ? 20.0 : math.min(math.max((volume / avg_vol - 1) * 10, 0), 20)
-s_consist   = consistency * 20
-s_volstr    = math.min(math.max(vol_adj_str * 5, 0), 20)
+// ── Composite Pulse Score (0–100) ───────────────────────────────────────────
+pulse_score = s_momentum + s_volume + s_consist + s_rsi + s_earnings
 
-pulse_score = s_momentum + s_volume + s_consist + s_volstr
-
-// ── Crossover signals ───────────────────────────────────────────
+// ── Signal generation ───────────────────────────────────────────────────────
 bullish_cross = ta.crossover(fast_ma,  slow_ma)
 bearish_cross = ta.crossunder(fast_ma, slow_ma)
-is_bullish    = fast_ma > slow_ma
 
-// ── Visuals ─────────────────────────────────────────────────────
-plot(fast_ma, title="Fast MA", color=color.new(#7cf0c8, 0), linewidth=2)
-plot(slow_ma, title="Slow MA", color=color.new(#f0b84c, 0), linewidth=2)
+// BUY quality filters matching the backtest methodology:
+//   1. Price ≥ 97% of 50d EMA — prevents entries inside long-term downtrends
+//   2. RSI ≥ 35 — blocks entries into extreme oversold / dead-cat-bounce conditions
+// SELL exits are always unfiltered — always honour the exit signal
+trend_ok    = close >= ema_50 * 0.97
+rsi_ok      = rsi_14 >= 35
+buy_signal  = bullish_cross and (apply_filters ? (trend_ok and rsi_ok) : true)
+sell_signal = bearish_cross
 
-bull_bg = color.new(color.green, 92)
-bear_bg = color.new(color.red,   92)
-bgcolor(show_shading ? (is_bullish ? bull_bg : bear_bg) : na)
+is_bullish  = fast_ma > slow_ma
 
-if bullish_cross and show_labels
+// ── Plots ───────────────────────────────────────────────────────────────────
+plot(fast_ma, title="Fast MA", color=color.new(#7cf0c8, 0),    linewidth=2)
+plot(slow_ma, title="Slow MA", color=color.new(#f0b84c, 0),    linewidth=2)
+plot(ema_50,  title="50d EMA", color=color.new(color.gray, 55), linewidth=1)
+
+bgcolor(show_shading ? (is_bullish ? color.new(color.green, 92) : color.new(color.red, 92)) : na,
+        title="Trend background")
+
+// ── BUY / SELL labels ───────────────────────────────────────────────────────
+if buy_signal and show_labels
     label.new(bar_index, low,
-              text      = "BUY  " + str.tostring(math.round(pulse_score)),
+              text      = "BUY  " + str.tostring(pulse_score, "#"),
               style     = label.style_label_up,
               color     = color.new(#c8f135, 5),
               textcolor = #0a0a0b,
               size      = size.normal,
               yloc      = yloc.belowbar)
 
-if bearish_cross and show_labels
+if sell_signal and show_labels
     label.new(bar_index, high,
-              text      = "SELL  " + str.tostring(math.round(pulse_score)),
+              text      = "SELL  " + str.tostring(pulse_score, "#"),
               style     = label.style_label_down,
               color     = color.new(#f0604c, 5),
               textcolor = color.white,
               size      = size.normal,
               yloc      = yloc.abovebar)
 
-// ── Dashboard table ─────────────────────────────────────────────
+// ── Dashboard table ─────────────────────────────────────────────────────────
+// Declared at script level so it initialises correctly on bar 1
+var table dash = table.new(
+     position     = position.top_right,
+     columns      = 2,
+     rows         = 9,
+     bgcolor      = color.new(#111113, 0),
+     border_color = color.new(color.white, 75),
+     border_width = 1)
+
 if show_table and barstate.islast
-    var table dash = table.new(
-         position     = position.top_right,
-         columns      = 2,
-         rows         = 7,
-         bgcolor      = color.new(#0a0a0b, 20),
-         border_color = color.new(color.white, 70),
-         border_width = 1)
+    score_color = pulse_score >= 86 ? #c8f135 :
+                  pulse_score >= 71 ? color.new(#c8f135, 35) :
+                  pulse_score >= 51 ? #f0b84c :
+                  pulse_score >= 31 ? color.orange :
+                  #f0604c
 
-    cell(c, r, txt, clr) =>
-        table.cell(dash, c, r, txt,
-                   text_color = clr,
-                   text_size  = size.small,
-                   bgcolor    = color.new(#0a0a0b, 20))
+    sig_txt = is_bullish ? "▲  BULLISH" : "▼  BEARISH"
+    sig_clr = is_bullish ? #c8f135 : #f0604c
+    bg      = color.new(#111113, 0)
 
-    score_color = pulse_score >= 70 ? #c8f135 : pulse_score >= 40 ? #f0b84c : #f0604c
-    sig_txt     = is_bullish ? "▲  BULLISH" : "▼  BEARISH"
-    sig_clr     = is_bullish ? #c8f135      : #f0604c
+    table.cell(dash, 0, 0, "PULSE SCORE",  text_color=color.gray,  text_size=size.small, bgcolor=bg)
+    table.cell(dash, 1, 0, str.tostring(pulse_score, "#") + " / 100", text_color=score_color, text_size=size.small, bgcolor=bg)
+    table.cell(dash, 0, 1, "Signal",       text_color=color.gray,  text_size=size.small, bgcolor=bg)
+    table.cell(dash, 1, 1, sig_txt,        text_color=sig_clr,     text_size=size.small, bgcolor=bg)
+    table.cell(dash, 0, 2, "Momentum",     text_color=color.gray,  text_size=size.small, bgcolor=bg)
+    table.cell(dash, 1, 2, str.tostring(s_momentum,  "#.#") + " / 20", text_color=color.white, text_size=size.small, bgcolor=bg)
+    table.cell(dash, 0, 3, "Volume Surge", text_color=color.gray,  text_size=size.small, bgcolor=bg)
+    table.cell(dash, 1, 3, str.tostring(s_volume,    "#.#") + " / 20", text_color=color.white, text_size=size.small, bgcolor=bg)
+    table.cell(dash, 0, 4, "Consistency",  text_color=color.gray,  text_size=size.small, bgcolor=bg)
+    table.cell(dash, 1, 4, str.tostring(s_consist,   "#.#") + " / 20", text_color=color.white, text_size=size.small, bgcolor=bg)
+    table.cell(dash, 0, 5, "RSI Quality",  text_color=color.gray,  text_size=size.small, bgcolor=bg)
+    table.cell(dash, 1, 5, str.tostring(s_rsi,       "#.#") + " / 20", text_color=color.white, text_size=size.small, bgcolor=bg)
+    table.cell(dash, 0, 6, "Earnings",     text_color=color.gray,  text_size=size.small, bgcolor=bg)
+    table.cell(dash, 1, 6, str.tostring(s_earnings,  "#.#") + " / 20", text_color=color.white, text_size=size.small, bgcolor=bg)
+    table.cell(dash, 0, 7, "RSI (14)",     text_color=color.gray,  text_size=size.small, bgcolor=bg)
+    table.cell(dash, 1, 7, str.tostring(rsi_14, "#.0"),              text_color=color.white, text_size=size.small, bgcolor=bg)
+    table.cell(dash, 0, 8, "Price",        text_color=color.gray,  text_size=size.small, bgcolor=bg)
+    table.cell(dash, 1, 8, str.tostring(close, format.mintick),     text_color=color.white, text_size=size.small, bgcolor=bg)
 
-    cell(0,0,"PULSE SCORE",  color.gray), cell(1,0,str.tostring(math.round(pulse_score)) + " / 100", score_color)
-    cell(0,1,"Signal",       color.gray), cell(1,1,sig_txt,  sig_clr)
-    cell(0,2,"Momentum",     color.gray), cell(1,2,str.tostring(math.round(s_momentum))  + " / 20", color.white)
-    cell(0,3,"Volume",       color.gray), cell(1,3,str.tostring(math.round(s_volume))    + " / 20", color.white)
-    cell(0,4,"Consistency",  color.gray), cell(1,4,str.tostring(math.round(s_consist))   + " / 20", color.white)
-    cell(0,5,"Vol.strength", color.gray), cell(1,5,str.tostring(math.round(s_volstr))    + " / 20", color.white)
-    cell(0,6,"Price",        color.gray), cell(1,6,str.tostring(close, format.mintick),   color.white)
-
-alertcondition(bullish_cross, title="Pulse BUY",  message="Pulse Score BUY — {{ticker}} | Score: {{plot_0}}")
-alertcondition(bearish_cross, title="Pulse SELL", message="Pulse Score SELL — {{ticker}} | Score: {{plot_0}}")
+// ── Alert conditions ────────────────────────────────────────────────────────
+alertcondition(buy_signal,  title="Pulse BUY",  message="Pulse BUY  — Score: " + str.tostring(pulse_score, "#"))
+alertcondition(sell_signal, title="Pulse SELL", message="Pulse SELL — Score: " + str.tostring(pulse_score, "#"))
