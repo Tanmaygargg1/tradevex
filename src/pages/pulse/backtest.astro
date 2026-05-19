@@ -110,6 +110,13 @@ import Base from '../../layouts/Base.astro';
     </div>
   </section>
 
+  <style>
+    @media (max-width: 640px) {
+      #bt-chart { height: 260px !important; }
+      #eq-chart  { height: 110px !important; }
+    }
+  </style>
+
   <script is:inline src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.4/dist/lightweight-charts.standalone.production.js"></script>
   <script is:inline>
 

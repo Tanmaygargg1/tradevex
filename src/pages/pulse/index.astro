@@ -190,6 +190,15 @@ import Base from '../../layouts/Base.astro';
     </div>
   </section>
 
+  <style>
+    @media (max-width: 640px) {
+      #pulse-chart { height: 280px !important; }
+      #ir-levels   { grid-template-columns: repeat(2, 1fr) !important; }
+      .hero        { padding: 40px 0 32px; }
+      .hero__title { margin-bottom: 12px; }
+    }
+  </style>
+
   <script is:inline src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.4/dist/lightweight-charts.standalone.production.js"></script>
   <script is:inline>
 

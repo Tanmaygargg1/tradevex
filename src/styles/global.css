@@ -496,6 +496,50 @@ code, pre {
   }
 
   .nav__links li:last-child a { border-bottom: none; }
+
+  /* Hub page */
+  .hub-hero { padding: 56px 0 44px; }
+  .hub-signals { padding: 44px 0 64px; }
+  .hub-sub { font-size: 1rem; }
+
+  /* Factor bar — tighten label column */
+  .factor-bar { grid-template-columns: 90px 1fr 40px; gap: 8px; }
+  .factor-bar__label { font-size: 0.72rem; }
+
+  /* Score display */
+  .score-display__num { font-size: 3.5rem; }
+
+  /* Search — full width */
+  .search-wrap { max-width: 100%; }
+
+  /* Raw data table */
+  .raw-data-table td:first-child { width: 120px; font-size: 0.7rem; }
+
+  /* Backtest controls */
+  .bt-controls { padding: 16px; gap: 10px; }
+  .bt-field input, .bt-field select { min-width: 80px; }
+  .metric-grid { grid-template-columns: repeat(2, 1fr); }
+
+  /* Trade log */
+  .trade-log { font-size: 0.72rem; }
+  .trade-log th, .trade-log td { padding: 6px 6px; }
+
+  /* Docs tables — horizontal scroll */
+  .docs-content table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .docs-content table td:first-child { white-space: normal; }
+
+  /* Docs formula — smaller font */
+  .docs-formula { font-size: 0.74rem; }
+
+  /* Factor step mini bar — narrower */
+  .factor-step__mini-bar-wrap { width: 80px; }
+
+  /* Stat chip row wrapping */
+  .stat-chip { min-width: 110px; }
+
+  /* Report CTA stack on mobile */
+  .report-cta { flex-direction: column; align-items: stretch; }
+  .report-cta .btn { text-align: center; justify-content: center; }
 }
 
 /* ── Error / empty states ──────────────────────────── */
@@ -1080,8 +1124,6 @@ code, pre {
   min-height: 80vh;
 }
 
-@media (max-width: 780px) { .docs-layout { grid-template-columns: 1fr; } }
-
 .docs-nav {
   border-right: 1px solid var(--border);
   padding: 40px 0;
@@ -1089,6 +1131,59 @@ code, pre {
   top: 60px;
   height: calc(100vh - 60px);
   overflow-y: auto;
+}
+
+/* Mobile docs nav toggle */
+.docs-nav-toggle {
+  display: none;
+}
+
+@media (max-width: 780px) {
+  .docs-layout { grid-template-columns: 1fr; }
+
+  .docs-nav {
+    position: static;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 0;
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.3s ease;
+  }
+
+  .docs-nav.open {
+    max-height: 600px;
+    overflow-y: auto;
+    padding: 8px 0 16px;
+  }
+
+  .docs-nav-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    background: var(--surface);
+    user-select: none;
+    width: 100%;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    font-family: var(--font-body);
+  }
+
+  .docs-nav-toggle__chevron {
+    transition: transform 0.25s;
+    font-style: normal;
+  }
+
+  .docs-nav-toggle.open .docs-nav-toggle__chevron { transform: rotate(180deg); }
 }
 
 .docs-nav__section {
@@ -1122,7 +1217,11 @@ code, pre {
   max-width: 780px;
 }
 
-@media (max-width: 780px) { .docs-content { padding: 32px 24px 60px; } }
+@media (max-width: 780px) {
+  .docs-content { padding: 28px 20px 60px; }
+  .docs-content h2 { font-size: 1.3rem; }
+  .docs-content h3 { font-size: 0.95rem; }
+}
 
 .docs-section {
   margin-bottom: 60px;

@@ -24,6 +24,12 @@ import { Content as EarningsAlphaContent } from '../content/docs/earnings-alpha.
   <div class="container">
     <div class="docs-layout">
 
+      <!-- Mobile table of contents toggle -->
+      <button class="docs-nav-toggle" id="docs-nav-toggle" aria-expanded="false">
+        Table of contents
+        <i class="docs-nav-toggle__chevron">▾</i>
+      </button>
+
       <!-- Sidebar nav -->
       <nav class="docs-nav" id="docs-nav">
         <div class="docs-nav__section">Platform</div>
@@ -66,6 +72,7 @@ import { Content as EarningsAlphaContent } from '../content/docs/earnings-alpha.
   </div>
 
   <script is:inline>
+  // Sidebar active link on scroll
   const headings = document.querySelectorAll('.docs-content h2');
   const navLinks = document.querySelectorAll('.docs-nav a');
   const observer = new IntersectionObserver(entries => {
@@ -78,6 +85,25 @@ import { Content as EarningsAlphaContent } from '../content/docs/earnings-alpha.
     });
   }, { rootMargin: '-20% 0px -60% 0px' });
   headings.forEach(h => observer.observe(h));
+
+  // Mobile table of contents toggle
+  const toggle = document.getElementById('docs-nav-toggle');
+  const nav    = document.getElementById('docs-nav');
+  if (toggle && nav) {
+    toggle.addEventListener('click', () => {
+      const open = nav.classList.toggle('open');
+      toggle.classList.toggle('open', open);
+      toggle.setAttribute('aria-expanded', String(open));
+    });
+    // Close nav when a link is tapped on mobile
+    nav.querySelectorAll('a').forEach(a => {
+      a.addEventListener('click', () => {
+        nav.classList.remove('open');
+        toggle.classList.remove('open');
+        toggle.setAttribute('aria-expanded', 'false');
+      });
+    });
+  }
   </script>
 
 </Base>
