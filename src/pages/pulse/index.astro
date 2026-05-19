@@ -207,7 +207,7 @@ import Base from '../../layouts/Base.astro';
 
   async function fetchJSON(url) {
     const proxies = [
-      `https://corsproxy.io/?${encodeURIComponent(url)}`,
+      `https://tradevex.tanmay-g1474.workers.dev/?url=${encodeURIComponent(url)}`,
       `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
       `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
       `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
