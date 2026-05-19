@@ -1,5 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
+const base = import.meta.env.BASE_URL;
 ---
 <Base title="Platform" description="Tradevex — quantitative trading signals for independent equity traders.">
 
@@ -20,7 +21,7 @@ import Base from '../layouts/Base.astro';
 
       <div class="hub-grid">
 
-        <div class="hub-card hub-card--live" onclick="window.location.href='/pulse'" style="cursor:pointer">
+        <a class="hub-card hub-card--live" href={`${base}pulse`} style="text-decoration:none">
           <span class="hub-card__num">01</span>
           <div class="hub-card__tag hub-card__tag--live">Live</div>
           <h3>Pulse Score</h3>
@@ -31,9 +32,9 @@ import Base from '../layouts/Base.astro';
           </p>
           <div style="display:flex;align-items:center;gap:16px;margin-top:16px">
             <span class="hub-card__cta" style="margin-top:0">Open screener →</span>
-            <a href="/docs#overview" style="font-size:0.78rem;color:var(--muted);text-decoration:none" onclick="arguments[0].stopPropagation()">Read docs →</a>
+            <a href={`${base}docs#overview`} style="font-size:0.78rem;color:var(--muted);text-decoration:none" onclick="event.stopPropagation()">Read docs →</a>
           </div>
-        </div>
+        </a>
 
         <div class="hub-card hub-card--soon">
           <span class="hub-card__num">02</span>

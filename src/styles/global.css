@@ -1258,9 +1258,22 @@ code, pre {
 }
 
 @media (max-width: 780px) {
-  .docs-content { padding: 28px 20px 60px; }
-  .docs-content h2 { font-size: 1.3rem; }
-  .docs-content h3 { font-size: 0.95rem; }
+  .docs-content { padding: 24px 18px 60px; }
+  .docs-content h2 { font-size: 1.3rem; margin-top: 40px; }
+  .docs-content h3 { font-size: 1rem; }
+  .docs-content p, .docs-content ul, .docs-content ol { font-size: 0.95rem; line-height: 1.8; }
+  .docs-content table { font-size: 0.82rem; }
+  .docs-content table td, .docs-content table th { padding: 8px 10px; }
+
+  /* Docs nav toggle — readable size */
+  .docs-nav-toggle { font-size: 0.85rem; padding: 16px 18px; letter-spacing: 0.06em; color: var(--text); }
+
+  /* Docs nav links — bigger tap targets */
+  .docs-nav a { font-size: 0.95rem; padding: 10px 18px; }
+  .docs-nav__section { font-size: 0.72rem; padding: 0 18px; margin: 16px 0 6px; }
+
+  /* Formula / code blocks */
+  .docs-formula { font-size: 0.8rem; padding: 12px 14px; }
 }
 
 .docs-section {

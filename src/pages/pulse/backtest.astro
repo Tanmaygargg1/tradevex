@@ -118,21 +118,29 @@ import Base from '../../layouts/Base.astro';
       `https://corsproxy.io/?${encodeURIComponent(url)}`,
       `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
       `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+      `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
     ];
     let lastErr;
     for (const proxy of proxies) {
       try {
         const res = await Promise.race([
           fetch(proxy),
-          new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 10000)),
+          new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 12000)),
         ]);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
+        const text = await res.text();
+        let json;
+        try { json = JSON.parse(text); }
+        catch { throw new Error('Non-JSON response'); }
+        if (json?.contents && typeof json.contents === 'string') {
+          try { json = JSON.parse(json.contents); } catch {}
+        }
         if (json?.chart?.result) return json;
-        throw new Error('Unexpected shape');
-      } catch (e) { console.warn('proxy:', e.message); lastErr = e; }
+        if (json?.chart?.error) throw new Error(json.chart.error.description || 'Yahoo Finance error');
+        throw new Error('Unexpected response format');
+      } catch (e) { console.warn(`proxy failed: ${e.message}`); lastErr = e; }
     }
-    throw lastErr;
+    throw new Error(`Could not fetch data. ${lastErr?.message ?? ''}`);
   }
 
   const avg  = arr => arr.reduce((s, x) => s + x, 0) / arr.length;
@@ -442,8 +450,10 @@ import Base from '../../layouts/Base.astro';
       const q = raw.indicators.quote[0], ts = raw.timestamp;
       const candles = [];
       for (let i = 0; i < ts.length; i++) {
-        if (q.close[i] == null || q.open[i] == null) continue;
-        candles.push({ time: new Date(ts[i]*1000).toISOString().slice(0,10), open: q.open[i], high: q.high[i], low: q.low[i], close: q.close[i] });
+        if (!ts[i] || q.close[i] == null || q.open[i] == null || q.high[i] == null || q.low[i] == null) continue;
+        const d = new Date(ts[i] * 1000);
+        if (isNaN(d.getTime())) continue;
+        candles.push({ time: d.toISOString().slice(0,10), open: q.open[i], high: q.high[i], low: q.low[i], close: q.close[i] });
       }
       if (candles.length < slowP + 5) throw new Error(`Need at least ${slowP + 5} data points. Try a longer period.`);
       const result = runBacktest(candles, fastP, slowP, maType, capital);
