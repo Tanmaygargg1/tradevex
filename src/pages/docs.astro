@@ -1,0 +1,83 @@
+---
+import Base from '../layouts/Base.astro';
+import { Content as AboutContent }         from '../content/docs/about.md';
+import { Content as PulseContent }         from '../content/docs/pulse/pulse-score.md';
+import { Content as MeanRevContent }       from '../content/docs/mean-reversion.md';
+import { Content as BreakoutContent }      from '../content/docs/breakout-scanner.md';
+import { Content as OptionsContent }       from '../content/docs/options-flow.md';
+import { Content as SectorContent }        from '../content/docs/sector-rotation.md';
+import { Content as EarningsAlphaContent } from '../content/docs/earnings-alpha.md';
+---
+<Base title="Documentation" description="Complete reference for the Tradevex signal platform and its indicators.">
+
+  <div style="border-bottom:1px solid var(--border);padding:40px 0 32px">
+    <div class="container">
+      <p style="font-size:0.7rem;font-weight:600;text-transform:uppercase;letter-spacing:0.15em;color:var(--accent);margin-bottom:12px">Tradevex</p>
+      <h1 style="font-size:clamp(2rem,4vw,3rem);margin-bottom:10px">Documentation</h1>
+      <p style="color:var(--muted);font-size:1rem;max-width:560px;line-height:1.7">
+        Platform reference and technical documentation for all Tradevex signals — what they measure,
+        how they calculate, and how to interpret results.
+      </p>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="docs-layout">
+
+      <!-- Sidebar nav -->
+      <nav class="docs-nav" id="docs-nav">
+        <div class="docs-nav__section">Platform</div>
+        <a href="#about-vantage">About Tradevex</a>
+
+        <div class="docs-nav__section">Pulse Score</div>
+        <a href="#overview">Overview</a>
+        <a href="#scoring-system">Scoring system</a>
+        <a href="#momentum">Momentum</a>
+        <a href="#volume-surge">Volume Surge</a>
+        <a href="#trend-consistency">Trend Consistency</a>
+        <a href="#rsi-quality">RSI Quality</a>
+        <a href="#earnings-surprise">Earnings Surprise</a>
+        <a href="#signal-generation">Signal generation</a>
+        <a href="#backtesting">Backtesting</a>
+        <a href="#score-ranges">Score ranges</a>
+        <a href="#data-sources">Data sources</a>
+        <a href="#limitations">Limitations</a>
+
+        <div class="docs-nav__section">Coming Soon</div>
+        <a href="#mean-reversion" style="opacity:0.45">Mean Reversion</a>
+        <a href="#breakout-scanner" style="opacity:0.45">Breakout Scanner</a>
+        <a href="#options-flow" style="opacity:0.45">Options Flow</a>
+        <a href="#sector-rotation" style="opacity:0.45">Sector Rotation</a>
+        <a href="#earnings-alpha" style="opacity:0.45">Earnings Alpha</a>
+      </nav>
+
+      <!-- Content -->
+      <div class="docs-content">
+        <AboutContent />
+        <PulseContent />
+        <MeanRevContent />
+        <BreakoutContent />
+        <OptionsContent />
+        <SectorContent />
+        <EarningsAlphaContent />
+      </div>
+
+    </div>
+  </div>
+
+  <script is:inline>
+  const headings = document.querySelectorAll('.docs-content h2');
+  const navLinks = document.querySelectorAll('.docs-nav a');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navLinks.forEach(a => a.classList.remove('active'));
+        const active = document.querySelector(`.docs-nav a[href="#${entry.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -60% 0px' });
+  headings.forEach(h => observer.observe(h));
+  </script>
+
+</Base>

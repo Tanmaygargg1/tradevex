@@ -1,0 +1,106 @@
+//@version=6
+indicator(
+     title            = "Pulse Score Signal",
+     shorttitle       = "Pulse",
+     overlay          = true,
+     max_labels_count = 500
+     )
+
+// ── Inputs ─────────────────────────────────────────────────────
+fast_len     = input.int(10, minval=2,  maxval=200, title="Fast MA",  group="Moving averages")
+slow_len     = input.int(30, minval=5,  maxval=500, title="Slow MA",  group="Moving averages")
+ma_type      = input.string("SMA", options=["SMA","EMA"],             title="MA type", group="Moving averages")
+vol_mult     = input.float(2.0, minval=1.0, maxval=5.0, step=0.1,    title="Volume surge threshold (×avg)", group="Filters")
+show_labels  = input.bool(true,  title="Show BUY / SELL labels",      group="Visuals")
+show_shading = input.bool(true,  title="Shade background",            group="Visuals")
+show_table   = input.bool(true,  title="Show dashboard",              group="Visuals")
+
+// ── Calculations ────────────────────────────────────────────────
+fast_ma = ma_type == "EMA" ? ta.ema(close, fast_len) : ta.sma(close, fast_len)
+slow_ma = ma_type == "EMA" ? ta.ema(close, slow_len) : ta.sma(close, slow_len)
+
+avg_vol     = ta.sma(volume, 20)
+vol_surge   = volume > avg_vol * vol_mult
+
+up_count = 0
+for i = 0 to 9
+    if close[i] > open[i]
+        up_count += 1
+consistency = up_count / 10.0
+
+atr_20      = ta.atr(20)
+ret_5d      = (close - close[5]) / close[5] * 100
+avg_range   = atr_20 / close * 100
+vol_adj_str = avg_range > 0 ? ret_5d / avg_range : 0
+
+momentum    = (close - ta.sma(close, 20)) / ta.sma(close, 20) * 100
+
+// ── Score components (each 0–20) ────────────────────────────────
+s_momentum  = math.min(math.max(momentum * 2, 0), 20)
+s_volume    = vol_surge ? 20.0 : math.min(math.max((volume / avg_vol - 1) * 10, 0), 20)
+s_consist   = consistency * 20
+s_volstr    = math.min(math.max(vol_adj_str * 5, 0), 20)
+
+pulse_score = s_momentum + s_volume + s_consist + s_volstr
+
+// ── Crossover signals ───────────────────────────────────────────
+bullish_cross = ta.crossover(fast_ma,  slow_ma)
+bearish_cross = ta.crossunder(fast_ma, slow_ma)
+is_bullish    = fast_ma > slow_ma
+
+// ── Visuals ─────────────────────────────────────────────────────
+plot(fast_ma, title="Fast MA", color=color.new(#7cf0c8, 0), linewidth=2)
+plot(slow_ma, title="Slow MA", color=color.new(#f0b84c, 0), linewidth=2)
+
+bull_bg = color.new(color.green, 92)
+bear_bg = color.new(color.red,   92)
+bgcolor(show_shading ? (is_bullish ? bull_bg : bear_bg) : na)
+
+if bullish_cross and show_labels
+    label.new(bar_index, low,
+              text      = "BUY  " + str.tostring(math.round(pulse_score)),
+              style     = label.style_label_up,
+              color     = color.new(#c8f135, 5),
+              textcolor = #0a0a0b,
+              size      = size.normal,
+              yloc      = yloc.belowbar)
+
+if bearish_cross and show_labels
+    label.new(bar_index, high,
+              text      = "SELL  " + str.tostring(math.round(pulse_score)),
+              style     = label.style_label_down,
+              color     = color.new(#f0604c, 5),
+              textcolor = color.white,
+              size      = size.normal,
+              yloc      = yloc.abovebar)
+
+// ── Dashboard table ─────────────────────────────────────────────
+if show_table and barstate.islast
+    var table dash = table.new(
+         position     = position.top_right,
+         columns      = 2,
+         rows         = 7,
+         bgcolor      = color.new(#0a0a0b, 20),
+         border_color = color.new(color.white, 70),
+         border_width = 1)
+
+    cell(c, r, txt, clr) =>
+        table.cell(dash, c, r, txt,
+                   text_color = clr,
+                   text_size  = size.small,
+                   bgcolor    = color.new(#0a0a0b, 20))
+
+    score_color = pulse_score >= 70 ? #c8f135 : pulse_score >= 40 ? #f0b84c : #f0604c
+    sig_txt     = is_bullish ? "▲  BULLISH" : "▼  BEARISH"
+    sig_clr     = is_bullish ? #c8f135      : #f0604c
+
+    cell(0,0,"PULSE SCORE",  color.gray), cell(1,0,str.tostring(math.round(pulse_score)) + " / 100", score_color)
+    cell(0,1,"Signal",       color.gray), cell(1,1,sig_txt,  sig_clr)
+    cell(0,2,"Momentum",     color.gray), cell(1,2,str.tostring(math.round(s_momentum))  + " / 20", color.white)
+    cell(0,3,"Volume",       color.gray), cell(1,3,str.tostring(math.round(s_volume))    + " / 20", color.white)
+    cell(0,4,"Consistency",  color.gray), cell(1,4,str.tostring(math.round(s_consist))   + " / 20", color.white)
+    cell(0,5,"Vol.strength", color.gray), cell(1,5,str.tostring(math.round(s_volstr))    + " / 20", color.white)
+    cell(0,6,"Price",        color.gray), cell(1,6,str.tostring(close, format.mintick),   color.white)
+
+alertcondition(bullish_cross, title="Pulse BUY",  message="Pulse Score BUY — {{ticker}} | Score: {{plot_0}}")
+alertcondition(bearish_cross, title="Pulse SELL", message="Pulse Score SELL — {{ticker}} | Score: {{plot_0}}")

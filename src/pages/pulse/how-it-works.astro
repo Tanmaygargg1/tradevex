@@ -1,0 +1,133 @@
+---
+import Base from '../../layouts/Base.astro';
+---
+<Base title="How it works" description="The full maths behind the Pulse Score 5-factor algorithm.">
+
+  <section class="section">
+    <div class="container">
+
+      <p class="hero__eyebrow" style="margin-bottom:12px">The algorithm</p>
+      <h1 style="margin-bottom:16px">How Pulse Score works</h1>
+      <p style="color:var(--muted); max-width:640px; margin-bottom:56px; font-size:0.9rem">
+        Five independent factors, each scored 0–20, summed into a total of 0–100.
+        Every factor answers a different question about the stock's current condition.
+        This is educational — not financial advice.
+      </p>
+
+      <!-- Score legend -->
+      <div class="grid-3" style="margin-bottom:64px">
+        <div class="card" style="border-color:rgba(240,96,76,0.4)">
+          <div style="font-size:1.6rem;font-family:var(--font-head);font-weight:800;color:var(--danger)">0–30</div>
+          <div style="font-weight:700;margin:4px 0">Weak</div>
+          <div style="color:var(--muted);font-size:0.8rem">No meaningful signal. Most factors are negative or flat.</div>
+        </div>
+        <div class="card" style="border-color:rgba(240,184,76,0.4)">
+          <div style="font-size:1.6rem;font-family:var(--font-head);font-weight:800;color:var(--amber)">31–70</div>
+          <div style="font-weight:700;margin:4px 0">Moderate</div>
+          <div style="color:var(--muted);font-size:0.8rem">Some factors align. Mixed signal — proceed with caution.</div>
+        </div>
+        <div class="card" style="border-color:rgba(200,241,53,0.4)">
+          <div style="font-size:1.6rem;font-family:var(--font-head);font-weight:800;color:var(--accent)">71–100</div>
+          <div style="font-weight:700;margin:4px 0">Strong</div>
+          <div style="color:var(--muted);font-size:0.8rem">Multiple factors firing together. The clearest signal.</div>
+        </div>
+      </div>
+
+      <div class="factor-card">
+        <div class="factor-card__num">01</div>
+        <h3 class="factor-card__title">Momentum <span style="color:var(--muted);font-weight:400;font-size:0.85rem">&nbsp;0–20 pts</span></h3>
+        <p class="factor-card__desc">
+          How far above or below the stock's 20-day moving average is the current price?
+          A price well above its average means buyers have been in control — positive momentum.
+        </p>
+        <pre class="formula-block">pct_above_avg = (close - sma_20) / sma_20 × 100
+score         = clamp(pct_above_avg × 2, 0, 20)
+
+Example: price is 5% above avg → 5 × 2 = 10 pts
+         price is 10%+ above avg → capped at 20 pts
+         price is below avg → 0 pts (floored)</pre>
+      </div>
+
+      <div class="factor-card">
+        <div class="factor-card__num">02</div>
+        <h3 class="factor-card__title">Volume Surge <span style="color:var(--muted);font-weight:400;font-size:0.85rem">&nbsp;0–20 pts</span></h3>
+        <p class="factor-card__desc">
+          Is today's trading activity unusually high? Volume surges often signal that
+          institutions or large traders are actively entering a position — confirming the move.
+        </p>
+        <pre class="formula-block">surge_ratio = volume_today / avg_volume_20d
+score       = clamp((surge_ratio - 1) × 10, 0, 20)
+
+Example: 1.0× avg volume → 0 pts  (normal day)
+         2.0× avg volume → 10 pts  (busy day)
+         3.0× avg volume → 20 pts  (maximum)</pre>
+      </div>
+
+      <div class="factor-card">
+        <div class="factor-card__num">03</div>
+        <h3 class="factor-card__title">Trend Consistency <span style="color:var(--muted);font-weight:400;font-size:0.85rem">&nbsp;0–20 pts</span></h3>
+        <p class="factor-card__desc">
+          How many of the last 10 trading days closed higher than they opened?
+          A stock that closes up day after day shows persistent buying pressure.
+        </p>
+        <pre class="formula-block">up_days = count of last 10 days where close > open
+score   = (up_days / 10) × 20
+
+Example: 10/10 green → 20 pts
+          7/10 green → 14 pts
+          5/10 green → 10 pts  (random noise)
+          0/10 green →  0 pts</pre>
+      </div>
+
+      <div class="factor-card">
+        <div class="factor-card__num">04</div>
+        <h3 class="factor-card__title">RSI Quality <span style="color:var(--muted);font-weight:400;font-size:0.85rem">&nbsp;0–20 pts</span></h3>
+        <p class="factor-card__desc">
+          Momentum is most reliable when RSI sits in the "ideal bullish zone" — strong enough to
+          confirm a trend (above 55) but not stretched into overbought territory (above 75–80,
+          where mean-reversion risk rises sharply). Wilder's 14-period RSI is used.
+        </p>
+        <pre class="formula-block">rsi_14 = Wilder's RSI over 14 periods
+
+scoring:
+  55 – 75   → 20 pts  (ideal bullish zone)
+  40 – 55   → linear 0 – 20 pts  (neutral, building)
+  75 – 80   → linear 20 – 0 pts  (overbought warning)
+  > 80      →  0 pts  (extreme overbought)
+  &lt; 40   →  0 pts  (bearish pressure)</pre>
+      </div>
+
+      <div class="factor-card">
+        <div class="factor-card__num">05</div>
+        <h3 class="factor-card__title">Earnings Surprise <span style="color:var(--muted);font-weight:400;font-size:0.85rem">&nbsp;0–20 pts</span></h3>
+        <p class="factor-card__desc">
+          Did the company beat analyst earnings estimates last quarter?
+          The SUE (Standardised Unexpected Earnings) factor is one of the most studied
+          quantitative signals. Beating estimates by a wide margin often leads to sustained
+          price appreciation for months after the announcement.
+        </p>
+        <pre class="formula-block">surprise_pct = (actual_eps - estimated_eps) / |estimated_eps| × 100
+score        = clamp(surprise_pct × 1.5, 0, 20)
+
+Example: beat by 13%+ → 20 pts
+         met exactly →  0 pts
+         missed       →  0 pts (floored, not penalised further)</pre>
+        <p style="color:var(--muted);font-size:0.75rem;margin-top:12px">
+          Data source: Yahoo Finance <code>earningsHistory</code> module. If earnings data is unavailable, this factor scores 0.
+        </p>
+      </div>
+
+      <div class="card" style="margin-top:40px">
+        <h3 style="margin-bottom:12px">Data &amp; limitations</h3>
+        <ul style="list-style:none;padding:0;display:flex;flex-direction:column;gap:10px;color:var(--muted);font-size:0.85rem">
+          <li>→ All price data: Yahoo Finance (90-day daily chart, delayed ~15 min for free tier)</li>
+          <li>→ Earnings data: Yahoo Finance <code>quoteSummary</code> API — coverage varies by stock</li>
+          <li>→ The algorithm uses closing prices only — intraday moves are not captured</li>
+          <li>→ This is a <strong style="color:var(--text)">quantitative scoring tool</strong>, not investment advice. Always do your own research.</li>
+        </ul>
+      </div>
+
+    </div>
+  </section>
+
+</Base>

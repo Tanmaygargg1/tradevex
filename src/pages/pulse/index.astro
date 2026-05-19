@@ -1,0 +1,965 @@
+---
+import Base from '../../layouts/Base.astro';
+---
+<Base title="Pulse Score" description="Analyse any US stock with the Pulse Score — a 5-factor signal scoring system.">
+
+  <section class="hero">
+    <div class="container">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <p class="hero__eyebrow" style="margin-bottom:0">Real-time signal scoring</p>
+        <span class="version-tag">v1</span>
+      </div>
+      <h1 class="hero__title">Pulse Score</h1>
+      <p class="hero__desc">
+        Enter any US ticker. Live data is pulled from Yahoo Finance, the 5-factor
+        Pulse algorithm runs automatically, and a buy/sell signal is generated.
+      </p>
+      <form class="search-wrap" id="search-form">
+        <input id="ticker-input" class="search-input" type="text"
+          placeholder="e.g. AAPL, TSLA, NVDA" maxlength="6" autocomplete="off" spellcheck="false"/>
+        <button class="btn btn--primary" type="submit" id="search-btn">
+          <span id="btn-label">Analyse →</span>
+          <span class="loading-spinner" id="btn-spinner" style="display:none"></span>
+        </button>
+      </form>
+      <p class="error-msg" id="error-msg"></p>
+    </div>
+  </section>
+
+  <!-- Chart ───────────────────────────────────────── -->
+  <section style="padding:32px 0 0">
+    <div class="container">
+
+      <div class="chart-container" id="chart-container" style="border-radius:var(--radius) var(--radius) 0 0">
+        <div id="pulse-chart" style="width:100%;height:480px"></div>
+        <div id="chart-placeholder" style="
+          position:absolute;top:0;left:0;right:0;bottom:0;
+          display:flex;flex-direction:column;align-items:center;justify-content:center;
+          background:var(--surface);pointer-events:none;">
+          <svg width="48" height="48" viewBox="0 0 64 64" fill="none" style="opacity:.22">
+            <path d="M8 40 L20 24 L28 36 L38 16 L48 30 L56 22"
+              stroke="#c8f135" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <p style="color:var(--muted);font-size:0.8rem;margin-top:12px">Enter a ticker above to load the Pulse indicator</p>
+        </div>
+      </div>
+
+      <!-- Score strip — sits flush below chart -->
+      <div id="score-strip" style="
+        display:none;border:1px solid var(--border);border-top:none;background:var(--surface);
+        padding:12px 20px;border-radius:0 0 var(--radius) var(--radius);
+        align-items:center;gap:16px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:2px">Pulse Score</div>
+          <div style="display:flex;align-items:baseline;gap:4px">
+            <span id="strip-total" style="font-family:var(--font-head);font-size:1.8rem;font-weight:800;line-height:1">—</span>
+            <span style="color:var(--muted);font-size:0.8rem">/100</span>
+          </div>
+        </div>
+        <span class="signal-badge signal-badge--neutral" id="strip-badge">—</span>
+        <div style="width:1px;height:32px;background:var(--border)"></div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap">
+          <div style="text-align:center"><div style="font-size:0.6rem;text-transform:uppercase;color:var(--muted);letter-spacing:0.08em;margin-bottom:2px">Momentum</div><div id="strip-f1" style="font-size:0.9rem;font-weight:700">—</div></div>
+          <div style="text-align:center"><div style="font-size:0.6rem;text-transform:uppercase;color:var(--muted);letter-spacing:0.08em;margin-bottom:2px">Volume</div><div id="strip-f2" style="font-size:0.9rem;font-weight:700">—</div></div>
+          <div style="text-align:center"><div style="font-size:0.6rem;text-transform:uppercase;color:var(--muted);letter-spacing:0.08em;margin-bottom:2px">Trend</div><div id="strip-f3" style="font-size:0.9rem;font-weight:700">—</div></div>
+          <div style="text-align:center"><div style="font-size:0.6rem;text-transform:uppercase;color:var(--muted);letter-spacing:0.08em;margin-bottom:2px">RSI</div><div id="strip-f4" style="font-size:0.9rem;font-weight:700">—</div></div>
+          <div style="text-align:center"><div style="font-size:0.6rem;text-transform:uppercase;color:var(--muted);letter-spacing:0.08em;margin-bottom:2px">Earnings</div><div id="strip-f5" style="font-size:0.9rem;font-weight:700">—</div></div>
+        </div>
+        <div style="margin-left:auto">
+          <span style="font-size:0.67rem;color:var(--muted)">8d / 21d EMA overlay &nbsp;·&nbsp; </span>
+          <a href="/pulse/backtest" style="font-size:0.67rem;color:var(--accent)">Backtest this strategy →</a>
+        </div>
+      </div>
+
+      <!-- Ticker heading -->
+      <div id="ticker-heading" style="display:none;margin-top:20px;align-items:center;gap:16px;flex-wrap:wrap">
+        <h2 id="ticker-name" style="font-size:1.8rem"></h2>
+        <span class="signal-badge signal-badge--neutral" id="signal-badge">—</span>
+        <span id="company-name" style="color:var(--muted);font-size:0.82rem"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stats ───────────────────────────────────────── -->
+  <section id="stats-section" style="display:none">
+    <div class="container" style="padding:16px 24px">
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div class="stat-chip"><span class="stat-chip__label">Price</span><span class="stat-chip__value" id="stat-price">—</span></div>
+        <div class="stat-chip"><span class="stat-chip__label">Today's change</span><span class="stat-chip__value" id="stat-change">—</span></div>
+        <div class="stat-chip"><span class="stat-chip__label">Volume vs 20d avg</span><span class="stat-chip__value" id="stat-vol">—</span></div>
+        <div class="stat-chip"><span class="stat-chip__label">vs 20-day SMA</span><span class="stat-chip__value" id="stat-sma">—</span></div>
+        <div class="stat-chip"><span class="stat-chip__label">52-week range</span><span class="stat-chip__value" id="stat-52w">—</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- News ────────────────────────────────────────── -->
+  <section id="news-section" style="display:none">
+    <div class="container" style="padding-bottom:32px">
+      <div style="display:flex;align-items:center;gap:12px;margin:28px 0 16px;flex-wrap:wrap">
+        <h2 style="font-size:1.2rem">Latest News</h2>
+        <span class="raw-data-toggle__tag">Yahoo Finance</span>
+        <span id="news-ticker-label" style="color:var(--muted);font-size:0.8rem"></span>
+      </div>
+      <div class="news-grid" id="news-grid"></div>
+    </div>
+  </section>
+
+  <!-- Analysis ────────────────────────────────────── -->
+  <section id="analysis-section" style="display:none">
+    <div class="container" style="padding-bottom:80px">
+
+      <div class="raw-data-section" style="margin-top:8px">
+        <div class="raw-data-toggle" id="raw-data-toggle">
+          <span><span class="raw-data-toggle__title">Yahoo Finance raw price data</span><span class="raw-data-toggle__tag">Source</span></span>
+          <span style="color:var(--muted);font-size:0.8rem" id="raw-data-chevron">Show ↓</span>
+        </div>
+        <div class="raw-data-body" id="raw-data-body">
+          <table class="raw-data-table" id="raw-data-table"></table>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:32px 0 16px;flex-wrap:wrap;gap:12px">
+        <div>
+          <h2 style="font-size:1.2rem;margin-bottom:4px">Step-by-step analysis</h2>
+          <p style="color:var(--muted);font-size:0.8rem">Click each factor to expand the full calculation and interpretation.</p>
+        </div>
+        <button class="btn btn--ghost" id="expand-all-btn" style="font-size:0.75rem;padding:8px 14px">Expand all</button>
+      </div>
+      <div id="factor-steps"></div>
+
+      <!-- Inline Signal Report -->
+      <div id="inline-report" style="display:none;margin-top:32px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+          <div>
+            <h2 style="font-size:1.2rem;margin-bottom:4px">Signal Report</h2>
+            <p style="font-size:0.78rem;color:var(--muted)">Auto-generated from live Yahoo Finance data</p>
+          </div>
+        </div>
+
+        <div class="card" style="border-left:3px solid var(--accent);margin-bottom:16px;padding:20px 24px">
+          <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:0.12em;color:var(--muted);margin-bottom:12px">Executive Summary</div>
+          <ul id="ir-exec" style="list-style:none;padding:0;display:flex;flex-direction:column;gap:8px"></ul>
+        </div>
+
+        <div class="grid-2" style="gap:16px;margin-bottom:16px;align-items:start">
+          <div class="card" style="padding:20px 24px">
+            <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:0.12em;color:var(--muted);margin-bottom:10px">EMA Signal Status</div>
+            <div id="ir-ma-status" style="font-size:1rem;font-weight:700;margin-bottom:8px"></div>
+            <div id="ir-ma-detail" style="font-size:0.82rem;color:var(--muted);line-height:1.6;margin-bottom:6px"></div>
+            <div id="ir-ma-cross" style="font-size:0.78rem;color:var(--muted)"></div>
+          </div>
+          <div class="card" style="padding:20px 24px;border:1px solid rgba(240,96,76,0.25)">
+            <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:0.12em;color:var(--muted);margin-bottom:10px">Risk Flags</div>
+            <ul id="ir-risks" style="list-style:none;padding:0;display:flex;flex-direction:column;gap:6px"></ul>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px;padding:20px 24px">
+          <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:0.12em;color:var(--muted);margin-bottom:14px">Key Price Levels</div>
+          <div id="ir-levels" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px"></div>
+        </div>
+
+        <div class="card" style="padding:20px 24px">
+          <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:0.12em;color:var(--muted);margin-bottom:12px">Factor Detail</div>
+          <div id="ir-factors" style="display:flex;flex-direction:column;gap:4px"></div>
+        </div>
+      </div>
+
+      <div class="grid-2" style="gap:24px;margin-top:32px;align-items:start">
+        <div class="card" style="text-align:center;padding:40px 32px">
+          <div class="score-display__label" style="margin-bottom:8px">Total Pulse Score</div>
+          <div class="score-display__num" id="big-score">0</div>
+          <div style="color:var(--muted);font-size:0.8rem;margin-top:4px">out of 100</div>
+          <div style="margin-top:16px"><span class="signal-badge" id="score-badge">—</span></div>
+          <p id="score-interp" style="margin-top:16px;color:var(--muted);font-size:0.8rem;line-height:1.6"></p>
+        </div>
+        <div class="card">
+          <h3 style="margin-bottom:20px">Score breakdown</h3>
+          <div class="factor-bar"><span class="factor-bar__label">Momentum</span><div class="factor-bar__track"><div class="factor-bar__fill" id="bar-f1" style="width:0%"></div></div><span class="factor-bar__value" id="val-f1">0/20</span></div>
+          <div class="factor-bar"><span class="factor-bar__label">Volume surge</span><div class="factor-bar__track"><div class="factor-bar__fill" id="bar-f2" style="width:0%"></div></div><span class="factor-bar__value" id="val-f2">0/20</span></div>
+          <div class="factor-bar"><span class="factor-bar__label">Trend consist.</span><div class="factor-bar__track"><div class="factor-bar__fill" id="bar-f3" style="width:0%"></div></div><span class="factor-bar__value" id="val-f3">0/20</span></div>
+          <div class="factor-bar"><span class="factor-bar__label">RSI Quality</span><div class="factor-bar__track"><div class="factor-bar__fill" id="bar-f4" style="width:0%"></div></div><span class="factor-bar__value" id="val-f4">0/20</span></div>
+          <div class="factor-bar"><span class="factor-bar__label">Earnings</span><div class="factor-bar__track"><div class="factor-bar__fill" id="bar-f5" style="width:0%"></div></div><span class="factor-bar__value" id="val-f5">0/20</span></div>
+          <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border)">
+            <button class="btn btn--primary" id="download-report-btn" style="width:100%;font-size:0.8rem">↓ Download PDF Report</button>
+            <div style="font-size:0.68rem;color:var(--muted);text-align:center;margin-top:6px">Opens in new tab · use browser Print → Save as PDF</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script is:inline src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.4/dist/lightweight-charts.standalone.production.js"></script>
+  <script is:inline>
+
+  const FAST_MA = 8, SLOW_MA = 21;
+
+  let currentTicker = '';
+  let chartData = null, chartMAState = null, lastReportHTML = null;
+  let pulseChart = null, candleSeries = null, fastLine = null, slowLine = null;
+
+  async function fetchJSON(url) {
+    const proxies = [
+      `https://corsproxy.io/?${encodeURIComponent(url)}`,
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+      `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+    ];
+    let lastErr;
+    for (const proxy of proxies) {
+      try {
+        const res = await Promise.race([
+          fetch(proxy),
+          new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 8000)),
+        ]);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (json?.chart?.result || json?.quoteSummary || json?.news !== undefined) return json;
+        throw new Error('Unexpected shape');
+      } catch (e) { console.warn('proxy:', e.message); lastErr = e; }
+    }
+    throw lastErr;
+  }
+
+  async function fetchChartData(ticker) {
+    const json = await fetchJSON(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=3mo`);
+    const r = json?.chart?.result?.[0];
+    if (!r) throw new Error('No chart data');
+    return r;
+  }
+
+  async function fetchSummary(ticker) {
+    try {
+      const json = await fetchJSON(`https://query1.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=earningsHistory,summaryDetail,assetProfile,financialData,defaultKeyStatistics`);
+      return json?.quoteSummary?.result?.[0] ?? null;
+    } catch { return null; }
+  }
+
+  async function fetchNews(ticker) {
+    try {
+      const json = await fetchJSON(`https://query1.finance.yahoo.com/v1/finance/search?q=${ticker}&newsCount=9&quotesCount=0&lang=en-US`);
+      return json?.news ?? [];
+    } catch { return []; }
+  }
+
+  function timeAgo(epochSecs) {
+    const diff = Date.now() - epochSecs * 1000;
+    const m = Math.floor(diff / 60000), h = Math.floor(m / 60), d = Math.floor(h / 24);
+    if (d > 0) return `${d}d ago`;
+    if (h > 0) return `${h}h ago`;
+    return `${m}m ago`;
+  }
+
+  function renderNews(articles, ticker) {
+    const section = document.getElementById('news-section');
+    if (!articles.length) { section.style.display = 'none'; return; }
+    document.getElementById('news-ticker-label').textContent = `${ticker} · ${articles.length} stories`;
+    document.getElementById('news-grid').innerHTML = articles.map(a => {
+      const thumb = a.thumbnail?.resolutions?.[0]?.url;
+      return `<a href="${a.link}" target="_blank" rel="noopener noreferrer" class="news-card">
+        ${thumb ? `<img class="news-thumb" src="${thumb}" alt="" loading="lazy" />` : ''}
+        <div class="news-content">
+          <div class="news-publisher">${a.publisher} <span class="news-age">· ${timeAgo(a.providerPublishTime)}</span></div>
+          <div class="news-title">${a.title}</div>
+        </div>
+      </a>`;
+    }).join('');
+    section.style.display = 'block';
+  }
+
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const avg   = arr => arr.reduce((s, x) => s + x, 0) / arr.length;
+  const last  = arr => arr[arr.length - 1];
+  const fmt   = (n, d = 2) => Number(n).toFixed(d);
+  const pct   = (n, d = 2) => (n >= 0 ? '+' : '') + fmt(n, d) + '%';
+  const raw   = (obj, key) => obj?.[key]?.raw ?? null;
+
+function computeEMA(closes, dates, period) {
+    const k = 2 / (period + 1);
+    const out = [];
+    let ema = null;
+    for (let i = 0; i < closes.length; i++) {
+      if (i < period - 1) continue;
+      ema = ema === null ? avg(closes.slice(0, period)) : closes[i] * k + ema * (1 - k);
+      out.push({ time: dates[i], value: ema });
+    }
+    return out;
+  }
+
+  function computeRSI(closes, period = 14) {
+    if (closes.length < period + 1) return null;
+    let avgGain = 0, avgLoss = 0;
+    for (let i = 1; i <= period; i++) {
+      const d = closes[i] - closes[i - 1];
+      if (d > 0) avgGain += d; else avgLoss -= d;
+    }
+    avgGain /= period; avgLoss /= period;
+    for (let i = period + 1; i < closes.length; i++) {
+      const d = closes[i] - closes[i - 1];
+      avgGain = (avgGain * (period - 1) + Math.max(d, 0)) / period;
+      avgLoss = (avgLoss * (period - 1) + Math.max(-d, 0)) / period;
+    }
+    return avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+  }
+
+  function crossoverMarkers(fast, slow) {
+    const fm = new Map(fast.map(d => [d.time, d.value]));
+    const sm = new Map(slow.map(d => [d.time, d.value]));
+    const times = fast.map(d => d.time).filter(t => sm.has(t));
+    const markers = [];
+    for (let i = 1; i < times.length; i++) {
+      const t0 = times[i-1], t1 = times[i];
+      const pf = fm.get(t0), ps = sm.get(t0), cf = fm.get(t1), cs = sm.get(t1);
+      if (pf !== undefined && ps !== undefined) {
+        if (pf <= ps && cf > cs) markers.push({ time: t1, position: 'belowBar', color: '#00ff44', shape: 'arrowUp',   text: '▲ BUY',  size: 3 });
+        if (pf >= ps && cf < cs) markers.push({ time: t1, position: 'aboveBar', color: '#ff2244', shape: 'arrowDown', text: '▼ SELL', size: 3 });
+      }
+    }
+    return markers;
+  }
+
+  function prepareChartData(chartResult) {
+    const q = chartResult.indicators.quote[0], ts = chartResult.timestamp;
+    const candles = [], dates = [], closes = [], volumes = [];
+    for (let i = 0; i < ts.length; i++) {
+      if (q.close[i] == null || q.open[i] == null) continue;
+      const date = new Date(ts[i] * 1000).toISOString().slice(0, 10);
+      candles.push({ time: date, open: q.open[i], high: q.high[i], low: q.low[i], close: q.close[i] });
+      volumes.push({ time: date, value: q.volume[i] ?? 0, color: q.close[i] >= q.open[i] ? 'rgba(200,241,53,0.12)' : 'rgba(240,96,76,0.12)' });
+      dates.push(date); closes.push(q.close[i]);
+    }
+    return { candles, dates, closes, volumes };
+  }
+
+  function createChart(prepared) {
+    const el = document.getElementById('pulse-chart');
+    if (pulseChart) { pulseChart.remove(); pulseChart = null; }
+    document.getElementById('chart-placeholder').style.display = 'none';
+    pulseChart = LightweightCharts.createChart(el, {
+      width: el.clientWidth, height: 480,
+      layout: { background: { type: 'solid', color: '#111113' }, textColor: '#6b6b78', fontSize: 11 },
+      grid: { vertLines: { color: '#1a1a1e' }, horzLines: { color: '#1a1a1e' } },
+      rightPriceScale: { borderColor: '#222226' },
+      timeScale: { borderColor: '#222226', timeVisible: true, fixRightEdge: true },
+      crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    });
+    candleSeries = pulseChart.addCandlestickSeries({ upColor: '#c8f135', downColor: '#f0604c', borderUpColor: '#c8f135', borderDownColor: '#f0604c', wickUpColor: '#7cf0c8', wickDownColor: '#f0604c' });
+    candleSeries.setData(prepared.candles);
+    const volSeries = pulseChart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
+    pulseChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+    volSeries.setData(prepared.volumes);
+    fastLine = pulseChart.addLineSeries({ color: '#7cf0c8', lineWidth: 2, title: `${FAST_MA}d EMA`, priceLineVisible: false });
+    slowLine = pulseChart.addLineSeries({ color: '#f0b84c', lineWidth: 2, title: `${SLOW_MA}d EMA`, priceLineVisible: false });
+    const fast = computeEMA(prepared.closes, prepared.dates, FAST_MA);
+    const slow = computeEMA(prepared.closes, prepared.dates, SLOW_MA);
+    fastLine.setData(fast); slowLine.setData(slow);
+    const markers = crossoverMarkers(fast, slow);
+    candleSeries.setMarkers(markers);
+    chartMAState = {
+      fastAboveSlow: (fast[fast.length-1]?.value ?? 0) > (slow[slow.length-1]?.value ?? 0),
+      lastCross: markers.length > 0 ? markers[markers.length-1] : null,
+    };
+    new ResizeObserver(e => { if (pulseChart) pulseChart.applyOptions({ width: e[0].contentRect.width }); }).observe(el);
+  }
+
+  function narrateMomentum(score, pctAbove, sma20) {
+    if (pctAbove <= 0) return `Price is ${fmt(Math.abs(pctAbove),1)}% below its 20d SMA ($${fmt(sma20)}). Momentum scores 0 — recovery above SMA would be the first signal.`;
+    if (score >= 16)   return `Exceptional: ${fmt(pctAbove,1)}% above the 20d SMA ($${fmt(sma20)}). Sustained buying pressure, scoring ${score}/20.`;
+    if (score >= 10)   return `Solid: price is ${fmt(pctAbove,1)}% above its 20d SMA ($${fmt(sma20)}). Buyers in control, scoring ${score}/20.`;
+    return `Modest: ${fmt(pctAbove,1)}% above the 20d SMA ($${fmt(sma20)}). Positive but not exceptional — ${score}/20.`;
+  }
+  function narrateVolume(score, surge, curVol, avgVol) {
+    if (surge < 1)   return `Volume (${(curVol/1e6).toFixed(1)}M) is below the 20d average (${(avgVol/1e6).toFixed(1)}M). Light volume doesn't confirm the move — 0/20.`;
+    if (score >= 16) return `Very strong surge: ${fmt(surge,2)}× the 20d average. Institutional-level activity.`;
+    if (score >= 8)  return `Elevated: ${fmt(surge,2)}× the 20d average. Meaningful interest above normal, scoring ${score}/20.`;
+    return `Slightly above average at ${fmt(surge,2)}×. A modest signal.`;
+  }
+  function narrateTrend(upDays) {
+    const dn = 10 - upDays;
+    if (upDays >= 9) return `${upDays}/10 sessions closed green. Near-perfect consistency.`;
+    if (upDays >= 7) return `${upDays}/10 sessions closed green — only ${dn} red close${dn===1?'':'s'} in 10 days.`;
+    if (upDays >= 5) return `${upDays}/10 green — roughly balanced. Directionless short-term market.`;
+    return `Only ${upDays}/10 closed green. Sellers more active day-to-day.`;
+  }
+  function narrateRSI(score, rsi) {
+    if (rsi == null) return `RSI could not be computed — insufficient data. Factor 4 scores 0/20.`;
+    if (rsi > 80)   return `RSI of ${fmt(rsi,1)} is in extreme overbought territory. Strong momentum, but elevated pullback risk — scores 0/20.`;
+    if (rsi >= 75)  return `RSI of ${fmt(rsi,1)} is entering overbought conditions. Momentum exists but entry risk is rising. Scores ${score}/20.`;
+    if (rsi >= 55)  return `RSI of ${fmt(rsi,1)} sits in the ideal bullish zone (55–75). Strong momentum without overbought risk — full 20/20.`;
+    if (rsi >= 40)  return `RSI of ${fmt(rsi,1)} shows neutral-to-building conditions. Momentum is not yet confirmed. Scores ${score}/20.`;
+    return `RSI of ${fmt(rsi,1)} is below 40 — bearish pressure dominates. Not a favourable entry setup. Scores 0/20.`;
+  }
+  function narrateEarnings(score, surprisePct, actual, estimated) {
+    if (actual == null || estimated == null) return `No earnings history found. Factor 5 scores 0/20 when data is unavailable.`;
+    if (estimated === 0) return `Analyst estimate was $0.00 — surprise % undefined. Scoring 0/20.`;
+    if (actual < estimated) return `EPS missed: $${fmt(actual,2)} actual vs $${fmt(estimated,2)} estimate. Misses floor to 0.`;
+    if (score >= 16) return `Significant beat: $${fmt(actual,2)} vs $${fmt(estimated,2)} (+${fmt(surprisePct,1)}%). The SUE effect — beats like this often sustain outperformance for 60–90 days.`;
+    return `Beat: $${fmt(actual,2)} vs $${fmt(estimated,2)} (+${fmt(surprisePct,1)}%). Scoring ${score}/20.`;
+  }
+
+  function computePulseScore(chartResult, summary) {
+    const q = chartResult.indicators.quote[0];
+    const closes = q.close.filter(Boolean), opens = q.open.filter(Boolean);
+    const highs = q.high.filter(Boolean), lows = q.low.filter(Boolean), vols = q.volume.filter(Boolean);
+    const n = closes.length;
+    const sma20 = avg(closes.slice(-20)), curClose = last(closes);
+    const pctAbove = (curClose - sma20) / sma20 * 100;
+    const f1Score  = clamp(pctAbove * 2, 0, 20);
+    const avgVol = avg(vols.slice(-20)), curVol = last(vols);
+    const surge   = curVol / avgVol;
+    const f2Score = clamp((surge - 1) * 10, 0, 20);
+    let upDays = 0;
+    for (let i = n - 10; i < n; i++) if (closes[i] > opens[i]) upDays++;
+    const f3Score = (upDays / 10) * 20;
+    const ranges = [];
+    for (let i = n - 20; i < n; i++) ranges.push(highs[i] - lows[i]);
+    const atr20 = avg(ranges);
+    const rsiVal = computeRSI(closes);
+    const f4Score = rsiVal == null ? 0
+      : rsiVal > 80    ? 0
+      : rsiVal >= 55 && rsiVal <= 75 ? 20
+      : rsiVal > 75   ? clamp((80 - rsiVal) / 5 * 20, 0, 20)
+      : rsiVal >= 40  ? clamp((rsiVal - 40) / 15 * 20, 0, 20)
+      : 0;
+    let f5Score = 0, surprisePct = null, actualEPS = null, estimatedEPS = null;
+    const eh = summary?.earningsHistory?.history;
+    if (eh?.length > 0) {
+      const latest = eh[eh.length - 1];
+      actualEPS = raw(latest, 'epsActual'); estimatedEPS = raw(latest, 'epsEstimate');
+      if (actualEPS != null && estimatedEPS != null && estimatedEPS !== 0) {
+        surprisePct = (actualEPS - estimatedEPS) / Math.abs(estimatedEPS) * 100;
+        f5Score = clamp(surprisePct * 1.5, 0, 20);
+      }
+    }
+    const prevClose = closes[n - 2] ?? closes[n - 1];
+    const changePct = (curClose - prevClose) / prevClose * 100;
+    const sd = summary?.summaryDetail ?? {};
+    const lo52 = raw(sd, 'fiftyTwoWeekLow'), hi52 = raw(sd, 'fiftyTwoWeekHigh');
+    return {
+      total: f1Score + f2Score + f3Score + f4Score + f5Score,
+      factors: [
+        { num:'01', name:'Momentum', score: Math.round(f1Score),
+          data:[{label:'Current price',value:`$${fmt(curClose)}`},{label:'20d SMA',value:`$${fmt(sma20)}`},{label:'% above SMA',value:pct(pctAbove,2)}],
+          calc:`pct_above = (${fmt(curClose)} − ${fmt(sma20)}) / ${fmt(sma20)} × 100 = ${pct(pctAbove,2)}\nscore = clamp(${fmt(pctAbove,2)} × 2, 0, 20) → ${Math.round(f1Score)} / 20`,
+          narrative: narrateMomentum(Math.round(f1Score), pctAbove, sma20) },
+        { num:'02', name:'Volume Surge', score: Math.round(f2Score),
+          data:[{label:"Today's volume",value:`${(curVol/1e6).toFixed(2)}M`},{label:'20d avg vol',value:`${(avgVol/1e6).toFixed(2)}M`},{label:'Surge ratio',value:`${fmt(surge,2)}×`}],
+          calc:`surge = ${(curVol/1e6).toFixed(2)}M / ${(avgVol/1e6).toFixed(2)}M = ${fmt(surge,3)}×\nscore = clamp((${fmt(surge,3)} − 1) × 10, 0, 20) → ${Math.round(f2Score)} / 20`,
+          narrative: narrateVolume(Math.round(f2Score), surge, curVol, avgVol) },
+        { num:'03', name:'Trend Consistency', score: Math.round(f3Score),
+          data:[{label:'Green sessions',value:`${upDays} / 10`},{label:'Red sessions',value:`${10-upDays} / 10`}],
+          calc:`up_days = ${upDays}  (last 10 sessions)\nscore = (${upDays}/10) × 20 = ${Math.round(f3Score)} / 20`,
+          narrative: narrateTrend(upDays) },
+        { num:'04', name:'RSI Quality', score: Math.round(f4Score),
+          data:[{label:'RSI (14)',value:rsiVal!=null?fmt(rsiVal,1):'N/A'},{label:'Ideal zone',value:'55 – 75'},{label:'Status',value:rsiVal==null?'N/A':rsiVal>80?'Extreme overbought':rsiVal>=75?'Overbought':rsiVal>=55?'Bullish zone':rsiVal>=40?'Neutral':'Bearish'}],
+          calc:`rsi_14 = ${rsiVal!=null?fmt(rsiVal,1):'N/A'}\nscore: 55–75 → 20 | 40–55 → linear 0–20 | 75–80 → linear 20–0 | >80 or <40 → 0\n→ ${Math.round(f4Score)} / 20`,
+          narrative: narrateRSI(Math.round(f4Score), rsiVal) },
+        { num:'05', name:'Earnings Surprise', score: Math.round(f5Score),
+          data:[{label:'Actual EPS',value:actualEPS!=null?`$${fmt(actualEPS,2)}`:'N/A'},{label:'Estimate EPS',value:estimatedEPS!=null?`$${fmt(estimatedEPS,2)}`:'N/A'},{label:'Surprise %',value:surprisePct!=null?pct(surprisePct,1):'N/A'}],
+          calc: actualEPS!=null&&estimatedEPS!=null&&estimatedEPS!==0 ? `surprise = ${pct(surprisePct,2)}\nscore = clamp(${fmt(surprisePct,2)} × 1.5, 0, 20) → ${Math.round(f5Score)} / 20` : 'No earnings data available.',
+          narrative: narrateEarnings(Math.round(f5Score), surprisePct, actualEPS, estimatedEPS) },
+      ],
+      stats: { price: curClose, changePct, surge, pctAbove, lo52, hi52 },
+      rawData: {
+        ticker: chartResult.meta?.symbol, exchange: chartResult.meta?.exchangeName,
+        currency: chartResult.meta?.currency, price: curClose, prevClose, changePct,
+        open: last(q.open), high: last(q.high), low: last(q.low), curVol, avgVol, sma20, atr20, rsiVal,
+        dataPoints: closes.length,
+        latestDate: new Date(chartResult.timestamp[chartResult.timestamp.length-1]*1000).toLocaleDateString('en-US'),
+        actualEPS, estimatedEPS, surprisePct,
+      },
+    };
+  }
+
+  function interpretation(s) {
+    if (s >= 86) return { label:'Very strong signal', cls:'score--strong',   badge:'signal-badge--bull',    text:'Exceptional alignment across all 5 factors.' };
+    if (s >= 71) return { label:'Strong signal',      cls:'score--strong',   badge:'signal-badge--bull',    text:'Multiple factors firing simultaneously.' };
+    if (s >= 51) return { label:'Moderate signal',    cls:'score--good',     badge:'signal-badge--bull',    text:'Some factors are aligned but the picture is incomplete.' };
+    if (s >= 31) return { label:'Below average',      cls:'score--moderate', badge:'signal-badge--neutral', text:'Mixed signals — most factors are weak or flat.' };
+    return          { label:'Weak / no signal',       cls:'score--weak',     badge:'signal-badge--bear',    text:'Very few factors are positive right now.' };
+  }
+  const pillCls = s => s >= 14 ? 'score--strong' : s >= 8 ? 'score--good' : s >= 4 ? 'score--moderate' : 'score--weak';
+
+  function renderFactorSteps(factors) {
+    document.getElementById('factor-steps').innerHTML = factors.map((f, idx) => `
+      <div class="factor-step" id="factor-step-${idx}">
+        <div class="factor-step__header" onclick="toggleStep(${idx})">
+          <span class="factor-step__num">${f.num}</span>
+          <div class="factor-step__meta">
+            <span class="factor-step__name">${f.name}</span>
+            <div class="factor-step__mini-bar-wrap"><div class="factor-step__mini-bar" style="width:${(f.score/20)*100}%"></div></div>
+          </div>
+          <span class="factor-step__score-pill ${pillCls(f.score)}">${f.score} / 20</span>
+          <span class="factor-step__chevron">▼</span>
+        </div>
+        <div class="factor-step__body">
+          <div class="factor-step__section-label">Data used (Yahoo Finance)</div>
+          <div class="factor-step__data-grid">
+            ${f.data.map(d=>`<div class="factor-step__data-item"><span class="factor-step__data-label">${d.label}</span><span class="factor-step__data-value">${d.value}</span></div>`).join('')}
+          </div>
+          <div class="factor-step__section-label">Calculation</div>
+          <pre class="formula-block" style="margin-top:0">${f.calc}</pre>
+          <div class="factor-step__section-label" style="margin-top:16px">Why this score</div>
+          <div class="factor-step__interpretation">${f.narrative}</div>
+        </div>
+      </div>`).join('');
+  }
+
+  window.toggleStep = idx => document.getElementById(`factor-step-${idx}`).classList.toggle('open');
+
+  let allExpanded = false;
+  document.getElementById('expand-all-btn').addEventListener('click', () => {
+    allExpanded = !allExpanded;
+    document.querySelectorAll('.factor-step').forEach(el => el.classList.toggle('open', allExpanded));
+    document.getElementById('expand-all-btn').textContent = allExpanded ? 'Collapse all' : 'Expand all';
+  });
+
+  function renderRawData(rd) {
+    document.getElementById('raw-data-table').innerHTML = [
+      ['Ticker',rd.ticker??'—'],['Exchange',rd.exchange??'—'],['Currency',rd.currency??'—'],
+      ['Latest date',rd.latestDate],['Price',`$${fmt(rd.price)}`],['Prev close',`$${fmt(rd.prevClose)}`],
+      ['Change',pct(rd.changePct,2)],['O/H/L',`$${fmt(rd.open)} / $${fmt(rd.high)} / $${fmt(rd.low)}`],
+      ["Volume",`${(rd.curVol/1e6).toFixed(2)}M`],['Avg volume',`${(rd.avgVol/1e6).toFixed(2)}M`],
+      ['Vol surge',`${fmt(rd.curVol/rd.avgVol,2)}×`],['20d SMA',`$${fmt(rd.sma20)}`],
+      ['20d ATR',`$${fmt(rd.atr20,2)}`],['RSI (14)',rd.rsiVal!=null?fmt(rd.rsiVal,1):'N/A'],['Data points',`${rd.dataPoints} sessions`],
+      ['EPS actual',rd.actualEPS!=null?`$${fmt(rd.actualEPS,2)}`:'N/A'],
+      ['EPS estimate',rd.estimatedEPS!=null?`$${fmt(rd.estimatedEPS,2)}`:'N/A'],
+    ].map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+  }
+
+  document.getElementById('raw-data-toggle').addEventListener('click', () => {
+    const body = document.getElementById('raw-data-body');
+    const open = body.classList.toggle('open');
+    document.getElementById('raw-data-chevron').textContent = open ? 'Hide ↑' : 'Show ↓';
+  });
+
+  function renderInlineReport(r, summary) {
+    const total  = Math.round(r.total);
+    const interp = interpretation(total), rd = r.rawData;
+    const maState = chartMAState ?? { fastAboveSlow: false, lastCross: null };
+    const lo52 = r.stats.lo52, hi52 = r.stats.hi52;
+    const rangePos = lo52 && hi52 && hi52 > lo52
+      ? Math.round((rd.price - lo52) / (hi52 - lo52) * 100) : null;
+    const sorted    = [...r.factors].sort((a,b) => b.score - a.score);
+    const strongest = sorted[0], weakest = sorted[sorted.length - 1];
+    const maColor   = maState.fastAboveSlow ? 'var(--accent)' : 'var(--danger)';
+
+    // — fundamental data helpers —
+    const fd  = summary?.financialData ?? {};
+    const ks  = summary?.defaultKeyStatistics ?? {};
+    const ap  = summary?.assetProfile ?? {};
+    const rawV = (obj, key) => obj[key]?.raw ?? null;
+    const fmtPct = v => v != null ? (v * 100).toFixed(1) + '%' : 'N/A';
+    const fmtM   = v => {
+      if (v == null) return 'N/A';
+      if (v >= 1e12) return '$' + (v / 1e12).toFixed(2) + 'T';
+      if (v >= 1e9)  return '$' + (v / 1e9).toFixed(2) + 'B';
+      if (v >= 1e6)  return '$' + (v / 1e6).toFixed(2) + 'M';
+      return '$' + v.toFixed(0);
+    };
+
+    const marketCap     = rawV(ks, 'marketCap');
+    const trailingPE    = rawV(ks, 'trailingPE');
+    const forwardPE     = rawV(ks, 'forwardPE');
+    const beta          = rawV(ks, 'beta');
+    const pbRatio       = rawV(ks, 'priceToBook');
+    const pegRatio      = rawV(ks, 'pegRatio');
+    const shortRatio    = rawV(ks, 'shortRatio');
+    const profitMargin  = rawV(fd, 'profitMargins');
+    const grossMargin   = rawV(fd, 'grossMargins');
+    const opMargin      = rawV(fd, 'operatingMargins');
+    const revGrowth     = rawV(fd, 'revenueGrowth');
+    const earnGrowth    = rawV(fd, 'earningsGrowth');
+    const roe           = rawV(fd, 'returnOnEquity');
+    const debtToEq      = rawV(fd, 'debtToEquity');
+    const currentRatio  = rawV(fd, 'currentRatio');
+    const totalCash     = rawV(fd, 'totalCash');
+    const totalDebt     = rawV(fd, 'totalDebt');
+    const freeCF        = rawV(fd, 'freeCashflow');
+    const recKey        = fd.recommendationKey ?? null;
+    const recMean       = rawV(fd, 'recommendationMean');
+    const numAnalysts   = rawV(fd, 'numberOfAnalystOpinions');
+    const targetMean    = rawV(fd, 'targetMeanPrice');
+    const targetHigh    = rawV(fd, 'targetHighPrice');
+    const targetLow     = rawV(fd, 'targetLowPrice');
+    const businessDesc  = ap.longBusinessSummary ?? '';
+    const employees     = ap.fullTimeEmployees ?? null;
+    const sector        = ap.sector ?? '';
+    const industry      = ap.industry ?? '';
+
+    // — prose helpers —
+    const scoreVerdict = total >= 86 ? 'exceptional across all five dimensions'
+      : total >= 71 ? 'strong with multiple factors firing simultaneously'
+      : total >= 51 ? 'moderate — some factors are aligned but the picture is incomplete'
+      : total >= 31 ? 'below average — mixed signals dominate'
+      : 'weak — very few factors are positive right now';
+
+    const maVerdict = maState.fastAboveSlow
+      ? `The 8-day EMA is currently <strong style="color:var(--accent)">above</strong> the 21-day EMA, placing the strategy in a bullish regime. This means short-term momentum is outpacing the medium-term trend — historically the setup where the strategy generates its best entries. ${maState.lastCross ? `The most recent crossover — a <strong style="color:var(--text)">${maState.lastCross.text.replace('▲ ','').replace('▼ ','')}</strong> signal on <strong style="color:var(--text)">${maState.lastCross.time}</strong> — is the trigger point that initiated this regime.` : 'No crossover was detected in the loaded data window, meaning the current trend has been in place for longer than the displayed history.'}`
+      : `The 8-day EMA is currently <strong style="color:var(--danger)">below</strong> the 21-day EMA, placing the strategy in a bearish regime. Short-term momentum has rolled over below the medium-term trend — this is the configuration where the strategy issues SELL signals and avoids new long entries. ${maState.lastCross ? `The most recent crossover — a <strong style="color:var(--text)">${maState.lastCross.text.replace('▲ ','').replace('▼ ','')}</strong> signal on <strong style="color:var(--text)">${maState.lastCross.time}</strong> — marked the shift into this regime.` : ''}`;
+
+    const volVerdict = r.stats.surge >= 3
+      ? `Volume is running at <strong style="color:var(--accent)">${fmt(r.stats.surge,2)}×</strong> the 20-day average — this is significant institutional-level participation. Moves on this kind of volume have real force behind them and are far less likely to be noise. When price action is supported by 3× or more the normal volume, it typically signals that large funds are actively repositioning.`
+      : r.stats.surge >= 1.5
+      ? `Volume is elevated at <strong style="color:var(--accent)">${fmt(r.stats.surge,2)}×</strong> the 20-day average. This level of participation is meaningful — it suggests the price move is not happening in a vacuum, and that institutional or at least broadly distributed retail interest is behind it.`
+      : r.stats.surge >= 0.9
+      ? `Volume is roughly in line with the 20-day average at <strong style="color:var(--muted)">${fmt(r.stats.surge,2)}×</strong>. The move is not confirmed by exceptional participation, which tempers conviction slightly. Average volume is neutral — not a warning sign, but not a tailwind either.`
+      : `Volume is notably light at <strong style="color:var(--danger)">${fmt(r.stats.surge,2)}×</strong> the 20-day average. When price moves on below-average volume, the move is more susceptible to reversal. Thin volume often indicates a lack of conviction — professional traders watch this closely.`;
+
+    const betaComment = beta != null
+      ? beta > 1.5 ? `Beta of ${fmt(beta,2)} indicates this is a high-volatility stock that moves significantly more than the market — amplified both to the upside and downside.`
+        : beta > 1.0 ? `Beta of ${fmt(beta,2)} indicates above-market sensitivity — this stock tends to move more aggressively than the S&P 500.`
+        : beta > 0.5 ? `Beta of ${fmt(beta,2)} puts this in the moderate-volatility tier — broadly correlated with the market but with less extreme swings.`
+        : `Beta of ${fmt(beta,2)} indicates low market sensitivity — this stock moves relatively independently of broad market direction.`
+      : '';
+
+    const peComment = trailingPE != null
+      ? trailingPE > 50 ? `A trailing P/E of ${fmt(trailingPE,1)}× places this in growth territory — investors are paying a premium for future earnings. High multiples demand consistent execution; any earnings miss will be punished severely.`
+        : trailingPE > 25 ? `A trailing P/E of ${fmt(trailingPE,1)}× is above market average, reflecting growth expectations embedded in the price.`
+        : trailingPE > 15 ? `A trailing P/E of ${fmt(trailingPE,1)}× is roughly in line with broader market averages — moderate valuation.`
+        : `A trailing P/E of ${fmt(trailingPE,1)}× is below market average — either this stock is undervalued, or the market has concerns about earnings sustainability.`
+      : '';
+
+    const marginComment = profitMargin != null
+      ? profitMargin > 0.25 ? `Net profit margin of ${fmtPct(profitMargin)} is exceptional — the company converts more than a quarter of every revenue dollar into net income, indicating strong pricing power and cost discipline.`
+        : profitMargin > 0.10 ? `Net profit margin of ${fmtPct(profitMargin)} is healthy and above the cross-sector average, suggesting effective cost management and reasonable pricing leverage.`
+        : profitMargin > 0 ? `Net profit margin of ${fmtPct(profitMargin)} is positive but thin. The company is profitable, but there is limited buffer against revenue headwinds.`
+        : `Negative net profit margin of ${fmtPct(profitMargin)} means the company is currently spending more than it earns — common in high-growth phases but a risk factor to monitor carefully.`
+      : '';
+
+    const growthComment = revGrowth != null || earnGrowth != null
+      ? (() => {
+          const parts = [];
+          if (revGrowth != null) parts.push(`Revenue is growing at <strong style="color:${revGrowth>0?'var(--accent)':'var(--danger)'}">${fmtPct(revGrowth)}</strong> year-over-year${revGrowth > 0.20 ? ' — an aggressive expansion rate' : revGrowth > 0.05 ? '' : revGrowth >= 0 ? ' — modest but positive' : ' — revenue is contracting'}.`);
+          if (earnGrowth != null) parts.push(`Earnings are growing at <strong style="color:${earnGrowth>0?'var(--accent)':'var(--danger)'}">${fmtPct(earnGrowth)}</strong> year-over-year${earnGrowth > 0.20 ? ' — strong earnings leverage on revenue' : earnGrowth < 0 ? ' — earnings are under pressure' : ''}.`);
+          return parts.join(' ');
+        })()
+      : '';
+
+    const riskFlags = [];
+    if (!maState.fastAboveSlow)           riskFlags.push(['Bearish EMA regime', 'The 8d EMA has crossed below the 21d EMA — the trend is pointing down. The strategy will not generate a new BUY signal until this reverses.']);
+    if (r.stats.pctAbove < 0)            riskFlags.push(['Negative momentum', `Price is ${fmt(Math.abs(r.stats.pctAbove),1)}% below its 20-day SMA. The stock is underperforming its recent baseline — momentum Factor 1 is scoring zero.`]);
+    if (rd.changePct < -2)               riskFlags.push(['Sharp intraday decline', `The stock fell ${pct(rd.changePct,1)} today. A single-day move of this magnitude can signal distribution or news-driven selling pressure.`]);
+    if (r.stats.surge < 0.7)            riskFlags.push(['Thin volume', `Today's volume is only ${fmt(r.stats.surge,2)}× the 20-day average. Price moves on below-average volume are statistically more likely to reverse.`]);
+    if (total < 30)                      riskFlags.push(['Very low composite score', 'Fewer than two factors are contributing meaningfully. The stock does not show a quantitative setup worth acting on based on current data.']);
+    if (rangePos != null && rangePos > 90) riskFlags.push(['Near 52-week high', `At ${rangePos}% of the annual range, the stock is trading close to its yearly high. There is limited room to the upside before encountering the prior resistance ceiling.`]);
+    if (beta != null && beta > 2)        riskFlags.push(['Extreme beta', `Beta of ${fmt(beta,2)} means this stock moves more than twice as much as the market. Position sizing needs to account for this — a 5% market move could translate to a 10%+ swing here.`]);
+    if (debtToEq != null && debtToEq > 200) riskFlags.push(['High leverage', `Debt-to-equity of ${fmt(debtToEq/100,2)}× indicates heavy balance sheet leverage. Highly levered companies are more sensitive to interest rate changes and credit conditions.`]);
+    if (riskFlags.length === 0) riskFlags.push(['No material risk flags', 'The analysis does not surface any significant warning signals at this time. All quantitative checks are within normal bounds.']);
+
+    // ── BUILD HTML ─────────────────────────────────────────────────
+    const card = (title, body) => `
+      <div class="card" style="margin-bottom:16px;padding:24px 28px">
+        <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:0.14em;color:var(--muted);margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border)">${title}</div>
+        ${body}
+      </div>`;
+    const p = (txt, style='') => `<p style="font-size:0.88rem;color:var(--muted);line-height:1.75;margin-bottom:12px;${style}">${txt}</p>`;
+    const kvGrid = (items) => `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0">${items.map(([l,v,s])=>`<div style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:12px 14px"><div style="font-size:0.58rem;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted);margin-bottom:4px">${l}</div><div style="font-size:0.92rem;font-weight:700;color:var(--text)">${v}</div>${s?`<div style="font-size:0.68rem;color:var(--muted);margin-top:2px">${s}</div>`:''}</div>`).join('')}</div>`;
+
+    let html = '';
+
+    // 1. Executive summary
+    html += card('Executive Summary', `
+      ${p(`<strong style="color:var(--text)">${currentTicker}</strong>${sector?' — '+sector+' · '+industry:''} scored <strong style="color:var(--accent)">${total} out of 100</strong> on the Pulse composite model. The signal is <strong style="color:var(--text)">${scoreVerdict}</strong>. ${interp.text}`)}
+      ${p(`The strongest contributing factor is <strong style="color:var(--text)">${strongest.name}</strong> at ${strongest.score}/20, while the weakest is <strong style="color:var(--text)">${weakest.name}</strong> at ${weakest.score}/20. ${total >= 51 && maState.fastAboveSlow ? 'With a moderate-to-strong score and a bullish EMA regime, this configuration is where the Pulse strategy historically finds its best risk/reward setups.' : total >= 51 && !maState.fastAboveSlow ? 'While the composite score is moderate-to-strong, the bearish EMA regime acts as a headwind — the strategy will not generate a BUY crossover in this configuration.' : 'The overall picture is cautious — the quantitative setup does not present a high-conviction entry at this time.'}`)}
+      ${p(`${volVerdict}`)}
+      ${rangePos != null ? p(`From a 52-week range perspective, the stock is at <strong style="color:var(--text)">${rangePos}%</strong> of its annual range (low: <strong style="color:var(--text)">$${fmt(lo52)}</strong> — high: <strong style="color:var(--text)">$${fmt(hi52)}</strong>). ${rangePos > 80 ? 'Trading in the upper portion of the annual range can indicate strength, but also means less room to the upside before prior resistance levels are encountered.' : rangePos < 20 ? 'Trading near the lower end of the annual range suggests the stock has been under significant selling pressure over the past year.' : 'Mid-range positioning indicates no extreme in either direction.'}`) : ''}
+    `);
+
+    // 2. Business profile
+    if (businessDesc || sector) {
+      html += card('Business Profile', `
+        ${sector ? `${kvGrid([[`Sector`, sector, ''], ['Industry', industry||'—', ''], ['Employees', employees ? employees.toLocaleString() : 'N/A', 'Full-time']])}` : ''}
+        ${businessDesc ? p(businessDesc.length > 600 ? businessDesc.slice(0, 600) + '…' : businessDesc) : ''}
+      `);
+    }
+
+    // 3. EMA signal analysis
+    html += card('EMA Signal Analysis — 8/21 Crossover', `
+      <div style="display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:4px;background:${maState.fastAboveSlow?'rgba(200,241,53,0.08)':'rgba(240,96,76,0.08)'};border:1px solid ${maState.fastAboveSlow?'rgba(200,241,53,0.25)':'rgba(240,96,76,0.25)'};margin-bottom:16px">
+        <span style="font-size:0.75rem;font-weight:700;color:${maColor}">${maState.fastAboveSlow?'▲ BULLISH REGIME':'▼ BEARISH REGIME'}</span>
+      </div>
+      ${p(maVerdict)}
+      ${p('The 8/21 EMA crossover was chosen for Pulse because exponential moving averages weight recent price data more heavily than their simple counterparts, making them faster to react to trend changes. The 8-period fast EMA and 21-period slow EMA are a Fibonacci-derived pair — the ratio between them creates a natural sensitivity balance that filters out much of the noise a shorter combination would generate, while remaining responsive enough to catch moves early. When the fast EMA crosses above the slow, the strategy enters bullish mode. When it crosses below, it switches to bearish.')}
+    `);
+
+    // 4. Fundamentals
+    const hasFundamentals = marketCap || trailingPE || beta || profitMargin || revGrowth;
+    if (hasFundamentals) {
+      html += card('Fundamental Snapshot', `
+        ${kvGrid([
+          ['Market Cap',    fmtM(marketCap),    ''],
+          ['Trailing P/E',  trailingPE!=null?fmt(trailingPE,1)+'×':'N/A', ''],
+          ['Forward P/E',   forwardPE!=null?fmt(forwardPE,1)+'×':'N/A', ''],
+          ['Price / Book',  pbRatio!=null?fmt(pbRatio,2)+'×':'N/A', ''],
+          ['PEG Ratio',     pegRatio!=null?fmt(pegRatio,2):'N/A', ''],
+          ['Beta',          beta!=null?fmt(beta,2):'N/A', 'vs market'],
+        ])}
+        ${peComment ? p(peComment) : ''}
+        ${betaComment ? p(betaComment) : ''}
+        ${kvGrid([
+          ['Revenue Growth',   fmtPct(revGrowth),   'YoY'],
+          ['Earnings Growth',  fmtPct(earnGrowth),  'YoY'],
+          ['Profit Margin',    fmtPct(profitMargin), 'Net'],
+          ['Gross Margin',     fmtPct(grossMargin),  ''],
+          ['Op. Margin',       fmtPct(opMargin),     ''],
+          ['Return on Equity', fmtPct(roe),          ''],
+        ])}
+        ${growthComment ? p(growthComment) : ''}
+        ${marginComment ? p(marginComment) : ''}
+        ${(totalCash || totalDebt || freeCF || currentRatio) ? `
+          ${kvGrid([
+            ['Total Cash',     fmtM(totalCash),  ''],
+            ['Total Debt',     fmtM(totalDebt),  ''],
+            ['Free Cash Flow', fmtM(freeCF),     'TTM'],
+            ['Current Ratio',  currentRatio!=null?fmt(currentRatio,2):'N/A', 'liquidity'],
+            ['Debt / Equity',  debtToEq!=null?(debtToEq/100).toFixed(2)+'×':'N/A', ''],
+            ['Short Ratio',    shortRatio!=null?fmt(shortRatio,2)+' days':'N/A', 'days to cover'],
+          ])}
+          ${currentRatio != null ? p(currentRatio > 2 ? `Current ratio of ${fmt(currentRatio,2)} indicates strong short-term liquidity — the company can comfortably cover its near-term obligations with liquid assets on hand.` : currentRatio > 1 ? `Current ratio of ${fmt(currentRatio,2)} shows the company has more current assets than liabilities, though the buffer is not particularly wide.` : `Current ratio below 1 (${fmt(currentRatio,2)}) means current liabilities exceed current assets — a potential liquidity concern worth monitoring.`) : ''}
+        ` : ''}
+      `);
+    }
+
+    // 5. Analyst coverage
+    if (targetMean && numAnalysts) {
+      const upside = rd.price ? (targetMean - rd.price) / rd.price * 100 : null;
+      html += card('Analyst Coverage', `
+        ${kvGrid([
+          ['Consensus Target',  '$'+fmt(targetMean),  recKey ? recKey.toUpperCase() : ''],
+          ['Target High',       targetHigh?'$'+fmt(targetHigh):'N/A',  ''],
+          ['Target Low',        targetLow?'$'+fmt(targetLow):'N/A',    ''],
+          ['Analysts',          String(numAnalysts),   'covering'],
+          ['Upside / Downside', upside!=null?pct(upside,1):'N/A', 'to consensus'],
+          ['Rec. Score',        recMean!=null?fmt(recMean,2)+' / 5':'N/A', '1=buy, 5=sell'],
+        ])}
+        ${p(`${numAnalysts} analyst${numAnalysts!==1?'s':''} currently cover this stock with a consensus price target of <strong style="color:var(--text)">$${fmt(targetMean)}</strong> — implying ${upside!=null?`<strong style="color:${upside>=0?'var(--accent)':'var(--danger)'}">${pct(upside,1)}</strong> from the current price`:'an unknown move from current levels'}. The range of estimates runs from $${fmt(targetLow)} (bear case) to $${fmt(targetHigh)} (bull case), indicating ${targetHigh&&targetLow&&(targetHigh-targetLow)/targetMean>0.3?'significant disagreement among analysts — a wide spread like this often reflects genuine uncertainty about the business trajectory':'reasonable analyst alignment — a tighter spread suggests the investment thesis is broadly understood'}. ${recKey ? `The consensus recommendation is <strong style="color:var(--text)">${recKey.toUpperCase()}</strong> (${recMean!=null?fmt(recMean,2)+'/5':''}).` : ''}`)}
+      `);
+    }
+
+    // 6. Risk assessment
+    html += card('Risk Assessment', `
+      ${riskFlags.map(([title, desc])=>`
+        <div style="padding:12px 16px;margin-bottom:10px;background:var(--bg);border:1px solid var(--border);border-left:3px solid ${title==='No material risk flags'?'var(--accent)':'var(--danger)'};border-radius:0 4px 4px 0">
+          <div style="font-size:0.75rem;font-weight:600;color:${title==='No material risk flags'?'var(--accent)':'var(--text)'};margin-bottom:4px">${title}</div>
+          <div style="font-size:0.82rem;color:var(--muted);line-height:1.65">${desc}</div>
+        </div>`).join('')}
+    `);
+
+    // 7. Key price levels
+    html += card('Key Price Levels', kvGrid([
+      ['Current Price', `$${fmt(rd.price)}`,   pct(rd.changePct,2) + ' today'],
+      ['20d SMA',       `$${fmt(rd.sma20)}`,   pct(r.stats.pctAbove,1) + (r.stats.pctAbove >= 0 ? ' above' : ' below')],
+      ['52W Low',       lo52 ? `$${fmt(lo52)}` : 'N/A', lo52 ? pct((rd.price-lo52)/lo52*100,1)+' from low' : ''],
+      ['52W High',      hi52 ? `$${fmt(hi52)}` : 'N/A', hi52 ? pct((rd.price-hi52)/hi52*100,1)+' from high' : ''],
+      ['20d ATR',       `$${fmt(rd.atr20,2)}`, `${fmt(rd.atr20/rd.price*100,2)}% of price`],
+      ['52W Position',  rangePos != null ? `${rangePos}%` : 'N/A', 'of annual range'],
+    ]));
+
+    // 8. Factor deep analysis
+    html += card('Factor Analysis — Full Detail', r.factors.map(f => `
+      <div style="padding:16px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <span style="font-size:0.62rem;color:var(--muted);min-width:22px">${f.num}</span>
+          <strong style="font-size:0.88rem;color:var(--text)">${f.name}</strong>
+          <span class="${pillCls(f.score)}" style="font-size:0.68rem;padding:2px 8px;border-radius:12px;font-weight:600;margin-left:auto">${f.score} / 20</span>
+        </div>
+        <div style="background:var(--border);height:3px;border-radius:2px;overflow:hidden;margin-bottom:12px">
+          <div style="width:${(f.score/20)*100}%;height:100%;background:${f.score>=14?'var(--accent)':f.score>=8?'var(--amber)':'var(--danger)'};border-radius:2px"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+          ${f.data.map(d=>`<div style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:8px 10px"><div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">${d.label}</div><div style="font-size:0.82rem;font-weight:600;color:var(--text)">${d.value}</div></div>`).join('')}
+        </div>
+        ${p(f.narrative)}
+      </div>`).join(''));
+
+    // 9. Trading implications
+    html += card('Trading Implications', `
+      ${p(total >= 71 && maState.fastAboveSlow
+        ? `This is a high-conviction Pulse setup. A Pulse Score above 70 with a bullish EMA regime is the configuration the strategy is designed to operate in — all five factors are broadly aligned, the trend is confirmed by the EMA crossover, and the quantitative picture is as clear as it gets. This does not guarantee a profitable trade, but it represents a situation where the odds are stacked in the buyer's direction across multiple independent dimensions simultaneously.`
+        : total >= 51 && maState.fastAboveSlow
+        ? `This is a moderate-conviction setup. The EMA regime is bullish and the composite score is positive, but not all five factors are contributing strongly. In practice, the strongest Pulse setups have scores above 70 — a score in the 50s or 60s is valid but carries more uncertainty. Watch for score improvement (which happens as the stock continues to trade) before adding conviction to a position.`
+        : total >= 51 && !maState.fastAboveSlow
+        ? `The composite score is in positive territory, but the bearish EMA regime is a meaningful counterweight. The Pulse strategy specifically waits for an EMA crossover before entering — a strong score alone is not a buy signal. Think of the score as telling you the quality of the setup, and the EMA as telling you the timing. Right now, the quality is there but the timing signal is not.`
+        : total >= 31
+        ? `Below-average composite score with mixed factor signals. The stock does not present a clear quantitative edge at this point. Monitor for improvements in factor alignment — specifically momentum (price needs to get above the 20d SMA), volume surge, and trend consistency — before considering an entry based on Pulse.`
+        : `Very low composite score. The majority of factors are scoring near zero, and the quantitative case for being long is weak. Unless there is a compelling fundamental catalyst not reflected in the price action data, this stock is not generating a favorable Pulse setup.`
+      )}
+      ${p('<strong style="color:var(--text)">Important:</strong> Pulse Score is a quantitative signal tool, not a financial advisor. All signals are educational in nature. This analysis is generated automatically from Yahoo Finance data and reflects conditions at the time of the last market close. Always apply your own judgment, position sizing discipline, and risk management framework before acting on any signal.')}
+    `);
+
+    document.getElementById('ir-exec').innerHTML = `<li style="list-style:none">${p(`<strong style="color:var(--text)">${total}/100</strong> — ${interp.label}. ${interp.text} ${sector ? '('+sector+')' : ''}`)}</li>`;
+    document.getElementById('ir-ma-status').innerHTML = `<span style="color:${maColor}">${maState.fastAboveSlow?'▲ Bullish':'▼ Bearish'} EMA Regime</span>`;
+    document.getElementById('ir-ma-detail').innerHTML = p(maVerdict);
+    document.getElementById('ir-ma-cross').textContent = '';
+    document.getElementById('ir-risks').innerHTML = riskFlags.map(([t])=>`<li style="font-size:0.8rem;padding:3px 0;color:var(--muted)"><span style="color:${t==='No material risk flags'?'var(--accent)':'var(--danger)'}">→ </span>${t}</li>`).join('');
+    document.getElementById('ir-levels').innerHTML = [
+      { label:'Price',     val:`$${fmt(rd.price)}`,  sub:pct(rd.changePct,2)+' today' },
+      { label:'20d SMA',   val:`$${fmt(rd.sma20)}`,  sub:pct(r.stats.pctAbove,1)+(r.stats.pctAbove>=0?' above':' below') },
+      { label:'52W Low',   val:lo52?`$${fmt(lo52)}`:'N/A', sub:lo52?pct((rd.price-lo52)/lo52*100,1)+' from low':'' },
+      { label:'52W High',  val:hi52?`$${fmt(hi52)}`:'N/A', sub:hi52?pct((rd.price-hi52)/hi52*100,1)+' from high':'' },
+      { label:'20d ATR',   val:`$${fmt(rd.atr20,2)}`, sub:`${fmt(rd.atr20/rd.price*100,2)}% of price` },
+      { label:'52W Pos.',  val:rangePos!=null?`${rangePos}%`:'N/A', sub:'of annual range' },
+    ].map(l=>`<div style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:10px 12px"><div style="font-size:0.58rem;text-transform:uppercase;letter-spacing:0.09em;color:var(--muted);margin-bottom:3px">${l.label}</div><div style="font-size:0.9rem;font-weight:700;color:var(--text)">${l.val}</div>${l.sub?`<div style="font-size:0.65rem;color:var(--muted);margin-top:2px">${l.sub}</div>`:''}</div>`).join('');
+    document.getElementById('ir-factors').innerHTML = `<div style="font-size:0.82rem;color:var(--muted);line-height:1.7">See Factor Analysis section in the full report below.</div>`;
+
+    const company = summary?.assetProfile?.longName ?? '';
+    const date    = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+
+    document.getElementById('inline-report').innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+        <div>
+          <h2 style="font-size:1.2rem;margin-bottom:4px">Signal Report — ${currentTicker}</h2>
+          <p style="font-size:0.78rem;color:var(--muted)">Auto-generated from live Yahoo Finance data · ${date}</p>
+        </div>
+      </div>
+      ${html}
+    `;
+    document.getElementById('inline-report').style.display = 'block';
+
+    // Store for PDF export
+    const pdfCSS = `
+:root{--bg:#0a0a0b;--sf:#111113;--bd:#222226;--ac:#c8f135;--te:#7cf0c8;--dr:#f0604c;--tx:#e8e8ec;--mt:#6b6b78;--bg2:#111113;--border:#222226;--surface:#111113;--text:#e8e8ec;--muted:#6b6b78;--accent:#c8f135;--danger:#f0604c;--amber:#f0b84c}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:Georgia,serif;font-size:13px;line-height:1.65;padding:48px 56px;max-width:1000px;margin:0 auto}
+h1{font-size:2rem;line-height:1.1;margin-bottom:6px;font-weight:700}
+h2{font-size:0.7rem;text-transform:uppercase;letter-spacing:0.12em;color:var(--mt);margin:36px 0 0;padding-bottom:8px;border-bottom:1px solid var(--bd)}
+p{font-size:0.84rem;color:var(--mt);line-height:1.75;margin-bottom:10px}
+p strong{color:var(--tx)}
+.logo{font-size:0.68rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--mt);margin-bottom:12px}
+.logo span{color:var(--ac)}
+.sub{color:var(--mt);font-size:0.72rem;margin-top:4px;margin-bottom:0}
+.card{background:var(--sf);border:1px solid var(--bd);border-radius:4px;padding:22px 26px;margin-top:14px;page-break-inside:avoid}
+.hero{background:var(--sf);border:1px solid var(--bd);border-radius:4px;padding:26px 30px;margin:18px 0 0;display:flex;gap:40px;flex-wrap:wrap;align-items:flex-start;page-break-inside:avoid}
+.snum{font-size:4.5rem;font-weight:700;line-height:1;color:var(--ac);font-family:Georgia,serif}
+.snum.mid{color:#f0b84c}.snum.bear{color:var(--dr)}
+.badge{display:inline-block;padding:3px 10px;border-radius:2px;font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;border:1px solid;margin-top:8px}
+.bull{background:rgba(200,241,53,.1);color:var(--ac);border-color:rgba(200,241,53,.3)}
+.bear-b{background:rgba(240,96,76,.1);color:var(--dr);border-color:rgba(240,96,76,.3)}
+.mid-b{background:rgba(107,107,120,.15);color:var(--mt);border-color:var(--bd)}
+.bars{flex:1;min-width:180px;padding-top:4px}
+.br{display:grid;grid-template-columns:160px 1fr 42px;gap:8px;align-items:center;margin-bottom:9px;font-size:0.74rem;color:var(--mt)}
+.bt{background:var(--bd);height:4px;border-radius:2px;overflow:hidden}.bf{height:100%;background:var(--ac)}
+div[style*="grid-template-columns:repeat(3"]{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}
+div[style*="grid-template-columns:repeat(3"] > div{background:var(--bg);border:1px solid var(--bd);border-radius:4px;padding:10px 12px}
+div[style*="grid-template-columns:repeat(3"] > div > div:first-child{font-size:0.58rem;text-transform:uppercase;letter-spacing:0.09em;color:var(--mt);margin-bottom:3px}
+div[style*="grid-template-columns:repeat(3"] > div > div:nth-child(2){font-size:0.88rem;font-weight:700;color:var(--tx)}
+div[style*="grid-template-columns:repeat(3"] > div > div:last-child{font-size:0.66rem;color:var(--mt);margin-top:2px}
+div[style*="border-left:3px solid"]{border-radius:0 4px 4px 0;padding:14px 18px;margin-bottom:10px}
+footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--bd);color:var(--mt);font-size:0.68rem;line-height:1.8}
+@media print{
+  body{padding:28px 36px}
+  .card,.hero{page-break-inside:avoid}
+  h2{page-break-after:avoid}
+}`;
+
+    lastReportHTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>Pulse Report — ${currentTicker}</title>
+<style>${pdfCSS}</style></head><body>
+<div class="logo">Tradevex · Pulse Score <span>v1</span></div>
+<h1>${currentTicker}${company?' — '+company:''}</h1>
+<p class="sub">${date} · Yahoo Finance · 8d/21d EMA strategy${sector?' · '+sector:''}${industry?' · '+industry:''}</p>
+<div class="hero">
+  <div>
+    <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--mt);margin-bottom:4px">Pulse Score</div>
+    <div class="snum ${total>=51?'':total>=31?'mid':'bear'}">${total}</div>
+    <div style="font-size:0.6rem;text-transform:uppercase;color:var(--mt);margin-top:2px">out of 100</div>
+    <div class="badge ${total>=51?'bull':total>=31?'mid-b':'bear-b'}">${interp.label}</div>
+    <p style="margin-top:8px;max-width:180px;line-height:1.5;font-size:0.78rem">${interp.text}</p>
+  </div>
+  <div class="bars">
+    <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:0.09em;color:var(--mt);margin-bottom:10px">Factor breakdown</div>
+    ${r.factors.map(f=>`<div class="br"><span>${f.name}</span><div class="bt"><div class="bf" style="width:${(f.score/20)*100}%"></div></div><span style="text-align:right">${f.score}/20</span></div>`).join('')}
+  </div>
+</div>
+${html}
+<footer>
+  Pulse Score v1 · Tradevex · Generated ${new Date().toISOString()}<br>
+  <strong style="color:var(--tx)">Educational only — not financial advice.</strong> Past performance does not guarantee future results. Data: Yahoo Finance public APIs.
+</footer>
+</body></html>`;
+  }
+
+  function updateUI(ticker, result, summary) {
+    const interp = interpretation(Math.round(result.total));
+    const total  = Math.round(result.total);
+    const strip = document.getElementById('score-strip');
+    strip.style.display = 'flex';
+    const st = document.getElementById('strip-total');
+    st.textContent = total; st.className = `${interp.cls}`; st.style.cssText = 'font-family:var(--font-head);font-size:1.8rem;font-weight:800;line-height:1';
+    const sb2 = document.getElementById('strip-badge');
+    sb2.textContent = interp.label; sb2.className = `signal-badge ${interp.badge}`;
+    result.factors.forEach((f,i) => {
+      const el = document.getElementById(`strip-f${i+1}`);
+      el.textContent = `${f.score}/20`; el.className = pillCls(f.score);
+    });
+    document.getElementById('ticker-heading').style.display = 'flex';
+    document.getElementById('ticker-name').textContent = ticker;
+    document.getElementById('company-name').textContent = summary?.assetProfile?.longName ?? '';
+    const sb = document.getElementById('signal-badge');
+    sb.textContent = interp.label; sb.className = `signal-badge ${interp.badge}`;
+    document.getElementById('stats-section').style.display = 'block';
+    const cc = result.stats.changePct >= 0 ? 'var(--accent)' : 'var(--danger)';
+    document.getElementById('stat-price').textContent  = `$${fmt(result.stats.price)}`;
+    document.getElementById('stat-change').innerHTML   = `<span style="color:${cc}">${pct(result.stats.changePct,2)}</span>`;
+    document.getElementById('stat-vol').textContent    = `${fmt(result.stats.surge,2)}× avg`;
+    document.getElementById('stat-sma').textContent    = pct(result.stats.pctAbove,2);
+    const lo52 = result.stats.lo52, hi52 = result.stats.hi52;
+    document.getElementById('stat-52w').textContent    = lo52&&hi52 ? `$${fmt(lo52)} — $${fmt(hi52)}` : '—';
+    renderRawData(result.rawData);
+    renderFactorSteps(result.factors);
+    document.getElementById('analysis-section').style.display = 'block';
+    result.factors.forEach((f,i) => {
+      document.getElementById(`bar-f${i+1}`).style.width = `${(f.score/20)*100}%`;
+      document.getElementById(`val-f${i+1}`).textContent = `${f.score}/20`;
+    });
+    const bs = document.getElementById('big-score');
+    bs.textContent = total; bs.className = `score-display__num ${interp.cls}`;
+    const scoreBadge = document.getElementById('score-badge');
+    scoreBadge.textContent = interp.label; scoreBadge.className = `signal-badge ${interp.badge}`;
+    document.getElementById('score-interp').textContent = interp.text;
+    renderInlineReport(result, summary);
+  }
+
+  document.getElementById('download-report-btn').addEventListener('click', () => {
+    if (!lastReportHTML) return;
+    const blob = new Blob([lastReportHTML], { type: 'text/html' });
+    const url  = URL.createObjectURL(blob);
+    const newWin = window.open(url, '_blank');
+    if (!newWin) { alert('Allow pop-ups for this site to open the PDF report.'); return; }
+    setTimeout(() => { newWin.focus(); newWin.print(); URL.revokeObjectURL(url); }, 700);
+  });
+
+  async function analyseStock(ticker) {
+    currentTicker = ticker;
+    document.getElementById('btn-label').style.display   = 'none';
+    document.getElementById('btn-spinner').style.display = 'inline-block';
+    const errEl = document.getElementById('error-msg');
+    errEl.style.display = 'none'; errEl.textContent = '';
+    ['analysis-section','news-section','stats-section'].forEach(id => document.getElementById(id).style.display = 'none');
+    document.getElementById('score-strip').style.display = 'none';
+    try {
+      const [chartResult, summary, news] = await Promise.all([fetchChartData(ticker), fetchSummary(ticker), fetchNews(ticker)]);
+      chartData = prepareChartData(chartResult);
+      createChart(chartData);
+      const result = computePulseScore(chartResult, summary);
+      updateUI(ticker, result, summary);
+      renderNews(news, ticker);
+    } catch (err) {
+      console.error(err);
+      errEl.textContent = `⚠ Could not fetch data for "${ticker}". Check the ticker is a valid US stock symbol. (${err.message})`;
+      errEl.style.display = 'block';
+    } finally {
+      document.getElementById('btn-label').style.display   = 'inline';
+      document.getElementById('btn-spinner').style.display = 'none';
+    }
+  }
+
+  document.getElementById('search-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const t = document.getElementById('ticker-input').value.trim().toUpperCase();
+    if (t) analyseStock(t);
+  });
+
+  </script>
+</Base>

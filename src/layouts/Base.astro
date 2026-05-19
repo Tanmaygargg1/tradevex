@@ -1,0 +1,78 @@
+---
+import '../styles/global.css';
+const { title = 'Tradevex', description = 'Quantitative trading signal platform' } = Astro.props;
+const currentPath = Astro.url.pathname;
+const isPulsePage = currentPath.includes('/pulse');
+const base = import.meta.env.BASE_URL;
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content={description} />
+  <title>{title} — Tradevex</title>
+
+  <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="container nav__inner">
+      <a href={base} class="nav__logo">
+        Tradevex<span>.</span>
+      </a>
+
+      <button class="nav__hamburger" id="nav-hamburger" aria-label="Open menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+
+      {isPulsePage ? (
+        <ul class="nav__links" id="nav__links">
+          <li><a href={`${base}pulse`}                class={(!currentPath.includes('/pulse/')) ? 'active' : ''}>Pulse Score</a></li>
+          <li><a href={`${base}pulse/backtest`}       class={currentPath.includes('/pulse/backtest')      ? 'active' : ''}>Backtest</a></li>
+          <li><a href={`${base}pulse/pine-script`}    class={currentPath.includes('/pulse/pine-script')   ? 'active' : ''}>Pine Script</a></li>
+        </ul>
+      ) : (
+        <ul class="nav__links" id="nav__links">
+          <li><a href={`${base}docs`} class={currentPath.includes('docs') ? 'active' : ''}>Docs</a></li>
+        </ul>
+      )}
+    </div>
+  </nav>
+
+  <main>
+    <slot />
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>Tradevex — educational only, not financial advice. Data via Yahoo Finance.</p>
+    </div>
+  </footer>
+
+  <script is:inline>
+    const _btn = document.getElementById('nav-hamburger');
+    const _links = document.getElementById('nav__links');
+    if (_btn && _links) {
+      _btn.addEventListener('click', () => {
+        const open = _links.classList.toggle('open');
+        _btn.setAttribute('aria-expanded', String(open));
+        _btn.classList.toggle('open', open);
+      });
+      document.addEventListener('click', e => {
+        if (!_btn.contains(e.target) && !_links.contains(e.target)) {
+          _links.classList.remove('open');
+          _btn.classList.remove('open');
+          _btn.setAttribute('aria-expanded', 'false');
+        }
+      });
+    }
+  </script>
+
+</body>
+</html>

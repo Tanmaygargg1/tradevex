@@ -1,0 +1,92 @@
+---
+import Base from '../layouts/Base.astro';
+---
+<Base title="Platform" description="Tradevex — quantitative trading signals for independent equity traders.">
+
+  <section class="hub-hero">
+    <div class="container">
+      <p class="hub-eyebrow">Signal Platform</p>
+      <h1 class="hub-title">Tradevex<span>.</span></h1>
+      <p class="hub-sub">
+        Quantitative trading signals for independent equity traders.
+        Rigorous data analysis — not noise, not hot takes.
+      </p>
+    </div>
+  </section>
+
+  <section class="hub-signals">
+    <div class="container">
+      <p class="hub-section-label">Available signals</p>
+
+      <div class="hub-grid">
+
+        <div class="hub-card hub-card--live" onclick="window.location.href='/pulse'" style="cursor:pointer">
+          <span class="hub-card__num">01</span>
+          <div class="hub-card__tag hub-card__tag--live">Live</div>
+          <h3>Pulse Score</h3>
+          <p>
+            A 5-factor scoring system that quantifies momentum, volume surge,
+            trend consistency, RSI quality, and earnings surprise
+            into a single 0–100 signal. Buy/sell signals via 8/21 EMA crossover.
+          </p>
+          <div style="display:flex;align-items:center;gap:16px;margin-top:16px">
+            <span class="hub-card__cta" style="margin-top:0">Open screener →</span>
+            <a href="/docs#overview" style="font-size:0.78rem;color:var(--muted);text-decoration:none" onclick="arguments[0].stopPropagation()">Read docs →</a>
+          </div>
+        </div>
+
+        <div class="hub-card hub-card--soon">
+          <span class="hub-card__num">02</span>
+          <div class="hub-card__tag hub-card__tag--soon">Coming soon</div>
+          <h3>Mean Reversion</h3>
+          <p>
+            Identifies statistically oversold conditions where price has deviated
+            significantly from its mean — flagging high-probability bounce setups.
+          </p>
+        </div>
+
+        <div class="hub-card hub-card--soon">
+          <span class="hub-card__num">03</span>
+          <div class="hub-card__tag hub-card__tag--soon">Coming soon</div>
+          <h3>Breakout Scanner</h3>
+          <p>
+            Detects price breakouts from multi-week consolidation ranges with
+            volume confirmation, filtering genuine expansion from noise.
+          </p>
+        </div>
+
+        <div class="hub-card hub-card--soon">
+          <span class="hub-card__num">04</span>
+          <div class="hub-card__tag hub-card__tag--soon">Coming soon</div>
+          <h3>Options Flow</h3>
+          <p>
+            Tracks unusual options activity — large block prints, sweep orders,
+            and skew shifts — to surface directional conviction before price moves.
+          </p>
+        </div>
+
+        <div class="hub-card hub-card--soon">
+          <span class="hub-card__num">05</span>
+          <div class="hub-card__tag hub-card__tag--soon">Coming soon</div>
+          <h3>Sector Rotation</h3>
+          <p>
+            Monitors relative strength flows between S&amp;P 500 sectors to identify
+            where institutional money is moving and align trades with the macro current.
+          </p>
+        </div>
+
+        <div class="hub-card hub-card--soon">
+          <span class="hub-card__num">06</span>
+          <div class="hub-card__tag hub-card__tag--soon">Coming soon</div>
+          <h3>Earnings Alpha</h3>
+          <p>
+            Post-earnings drift signal based on surprise magnitude and analyst revision
+            velocity — capturing the systematic outperformance that follows large EPS beats.
+          </p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+</Base>

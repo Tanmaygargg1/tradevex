@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sleep 3 && tail -10 /tmp/pulse-dev.log)",
+      "Read(//private/tmp/**)",
+      "Bash(pkill -f \"astro dev\")",
+      "Bash(npm run *)"
+    ]
+  }
+}

@@ -1,0 +1,473 @@
+---
+import Base from '../../layouts/Base.astro';
+---
+<Base title="Pulse Backtest" description="Backtest the Pulse Score MA crossover strategy against historical stock data.">
+
+  <section class="hero">
+    <div class="container">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <p class="hero__eyebrow" style="margin-bottom:0">Pulse Score · Strategy testing</p>
+        <span class="version-tag">v1</span>
+      </div>
+      <h1 class="hero__title">Backtest</h1>
+      <p class="hero__desc">
+        Test the Pulse MA crossover strategy against real historical data.
+        See every trade the strategy would have made, the equity curve, and how it compares to buy-and-hold.
+      </p>
+    </div>
+  </section>
+
+  <section style="padding:32px 0 0">
+    <div class="container">
+
+      <div class="bt-controls">
+        <div class="bt-field">
+          <label>Ticker</label>
+          <input id="bt-ticker" type="text" placeholder="AAPL" maxlength="6" style="width:100px;text-transform:uppercase"/>
+        </div>
+        <div class="bt-field">
+          <label>Period</label>
+          <select id="bt-period">
+            <option value="1y">1 Year</option>
+            <option value="2y" selected>2 Years</option>
+            <option value="5y">5 Years</option>
+            <option value="max">Max</option>
+          </select>
+        </div>
+        <div class="bt-field">
+          <label>Start capital ($)</label>
+          <input id="bt-capital" type="number" value="10000" min="1000" step="1000" style="width:120px"/>
+        </div>
+        <div class="bt-field" style="justify-content:flex-end">
+          <button class="btn btn--primary" id="bt-run-btn" style="height:42px">
+            <span id="bt-label">Run Backtest →</span>
+            <span class="loading-spinner" id="bt-spinner" style="display:none"></span>
+          </button>
+        </div>
+      </div>
+
+      <p class="error-msg" id="bt-error"></p>
+
+      <div id="bt-results" style="display:none">
+
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+          <h2 id="bt-title" style="font-size:1.2rem"></h2>
+          <span id="bt-period-label" style="color:var(--muted);font-size:0.8rem"></span>
+        </div>
+
+        <div class="metric-grid" id="metric-grid"></div>
+
+        <div class="chart-container" style="border-radius:var(--radius) var(--radius) 0 0;margin-bottom:0">
+          <div id="bt-chart" style="width:100%;height:420px"></div>
+        </div>
+
+        <div style="border:1px solid var(--border);border-top:none;background:var(--surface);padding:12px 16px;
+          border-radius:0 0 var(--radius) var(--radius);margin-bottom:32px">
+          <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:8px">
+            Portfolio equity curve — $<span id="eq-start"></span> starting capital
+          </div>
+          <div id="eq-chart" style="width:100%;height:160px"></div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+            <h3>Trade log</h3>
+            <span id="trade-count" style="font-size:0.78rem;color:var(--muted)"></span>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="trade-log">
+              <thead>
+                <tr>
+                  <th>#</th><th>Entry date</th><th>Exit date</th>
+                  <th>Entry price</th><th>Exit price</th>
+                  <th>Return</th><th>Capital after</th><th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="trade-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" id="bt-analysis" style="margin-top:16px;display:none">
+          <h3 style="margin-bottom:20px;font-size:1rem">Strategy Analysis</h3>
+          <div id="bt-analysis-content"></div>
+        </div>
+
+        <div class="card" style="margin-top:16px">
+          <h3 style="margin-bottom:8px;font-size:0.85rem">Pulse Strategy — Methodology</h3>
+          <ul style="list-style:none;padding:0;color:var(--muted);font-size:0.78rem;display:flex;flex-direction:column;gap:6px">
+            <li>→ <strong style="color:var(--text)">Strategy:</strong> Pulse Score — 8-day fast / 21-day slow EMA crossover (fixed)</li>
+            <li>→ <strong style="color:var(--text)">Entry:</strong> BUY at close when fast MA crosses above slow MA (bullish crossover)</li>
+            <li>→ <strong style="color:var(--text)">Exit:</strong> SELL at close when fast MA crosses below slow MA (bearish crossover)</li>
+            <li>→ <strong style="color:var(--text)">Position sizing:</strong> 100% of capital per trade (fully invested, long only)</li>
+            <li>→ <strong style="color:var(--text)">Costs:</strong> No transaction costs, slippage, or taxes modelled</li>
+            <li>→ <strong style="color:var(--text)">Buy &amp; hold:</strong> Calculated from first to last bar in the selected period</li>
+            <li>→ <strong style="color:var(--text)">Disclaimer:</strong> Past performance does not guarantee future results. Educational only.</li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <script is:inline src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.4/dist/lightweight-charts.standalone.production.js"></script>
+  <script is:inline>
+
+  async function fetchJSON(url) {
+    const proxies = [
+      `https://corsproxy.io/?${encodeURIComponent(url)}`,
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+      `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+    ];
+    let lastErr;
+    for (const proxy of proxies) {
+      try {
+        const res = await Promise.race([
+          fetch(proxy),
+          new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 10000)),
+        ]);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (json?.chart?.result) return json;
+        throw new Error('Unexpected shape');
+      } catch (e) { console.warn('proxy:', e.message); lastErr = e; }
+    }
+    throw lastErr;
+  }
+
+  const avg  = arr => arr.reduce((s, x) => s + x, 0) / arr.length;
+  const last = arr => arr[arr.length - 1];
+  const fmt  = (n, d = 2) => Number(n).toFixed(d);
+  const pct  = (n, d = 2) => (n >= 0 ? '+' : '') + fmt(n, d) + '%';
+
+  function computeSMA(closes, dates, period) {
+    const out = [];
+    for (let i = period - 1; i < closes.length; i++)
+      out.push({ time: dates[i], value: avg(closes.slice(i - period + 1, i + 1)) });
+    return out;
+  }
+
+  function computeEMA(closes, dates, period) {
+    const k = 2 / (period + 1);
+    const out = [];
+    let ema = null;
+    for (let i = 0; i < closes.length; i++) {
+      if (i < period - 1) continue;
+      ema = ema === null ? avg(closes.slice(0, period)) : closes[i] * k + ema * (1 - k);
+      out.push({ time: dates[i], value: ema });
+    }
+    return out;
+  }
+
+  function computeMA(closes, dates, period, type) {
+    return type === 'EMA' ? computeEMA(closes, dates, period) : computeSMA(closes, dates, period);
+  }
+
+  function computeRSIMap(closes, dates, period = 14) {
+    const out = new Map();
+    if (closes.length < period + 1) return out;
+    let avgGain = 0, avgLoss = 0;
+    for (let i = 1; i <= period; i++) {
+      const d = closes[i] - closes[i-1];
+      if (d > 0) avgGain += d; else avgLoss -= d;
+    }
+    avgGain /= period; avgLoss /= period;
+    out.set(dates[period], avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss));
+    for (let i = period + 1; i < closes.length; i++) {
+      const d = closes[i] - closes[i-1];
+      avgGain = (avgGain * (period - 1) + Math.max(d, 0)) / period;
+      avgLoss = (avgLoss * (period - 1) + Math.max(-d, 0)) / period;
+      out.set(dates[i], avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss));
+    }
+    return out;
+  }
+
+  function runBacktest(candles, fastPeriod, slowPeriod, maType, initialCapital) {
+    const dates  = candles.map(c => c.time);
+    const closes = candles.map(c => c.close);
+    const fast  = computeMA(closes, dates, fastPeriod, maType);
+    const slow  = computeMA(closes, dates, slowPeriod, maType);
+    const trend = computeEMA(closes, dates, 50);
+    const fm = new Map(fast.map(d => [d.time, d.value]));
+    const sm = new Map(slow.map(d => [d.time, d.value]));
+    const tm = new Map(trend.map(d => [d.time, d.value]));
+    const pm = new Map(candles.map(c => [c.time, c.close]));
+    const rsiMap = computeRSIMap(closes, dates);
+    const times = fast.map(d => d.time).filter(t => sm.has(t));
+    const signals = [];
+    for (let i = 1; i < times.length; i++) {
+      const t0 = times[i-1], t1 = times[i];
+      const pf = fm.get(t0), ps = sm.get(t0), cf = fm.get(t1), cs = sm.get(t1);
+      if (pf !== undefined && ps !== undefined) {
+        const crossUp = pf <= ps && cf > cs;
+        const crossDn = pf >= ps && cf < cs;
+        if (crossUp) {
+          const price = pm.get(t1) ?? 0;
+          const trendEMA = tm.get(t1);
+          const rsi = rsiMap.get(t1);
+          const trendOk = !trendEMA || price >= trendEMA * 0.97;
+          const rsiOk   = !rsi || rsi >= 35;
+          if (trendOk && rsiOk) signals.push({ date: t1, type: 'BUY' });
+        }
+        if (crossDn) signals.push({ date: t1, type: 'SELL' });
+      }
+    }
+    const priceMap = new Map(candles.map(c => [c.time, c.close]));
+    const trades = [];
+    let inTrade = false, entryPrice = null, entryDate = null;
+    let capital = initialCapital;
+    for (const sig of signals) {
+      const price = priceMap.get(sig.date);
+      if (!price) continue;
+      if (sig.type === 'BUY' && !inTrade) {
+        entryPrice = price; entryDate = sig.date; inTrade = true;
+      } else if (sig.type === 'SELL' && inTrade) {
+        const retPct = (price - entryPrice) / entryPrice * 100;
+        capital *= (1 + retPct / 100);
+        trades.push({ entryDate, exitDate: sig.date, entryPrice, exitPrice: price, returnPct: retPct, capitalAfter: capital, open: false });
+        inTrade = false;
+      }
+    }
+    if (inTrade) {
+      const lastClose = last(closes);
+      const retPct = (lastClose - entryPrice) / entryPrice * 100;
+      capital *= (1 + retPct / 100);
+      trades.push({ entryDate, exitDate: last(dates), entryPrice, exitPrice: lastClose, returnPct: retPct, capitalAfter: capital, open: true });
+    }
+    const equityCurve = buildEquityCurve(candles, trades, initialCapital);
+    const closed = trades.filter(t => !t.open);
+    const wins   = closed.filter(t => t.returnPct > 0);
+    const losses = closed.filter(t => t.returnPct <= 0);
+    const winRate      = closed.length > 0 ? (wins.length / closed.length) * 100 : 0;
+    const avgGain      = wins.length   > 0 ? avg(wins.map(t => t.returnPct))    : 0;
+    const avgLoss      = losses.length > 0 ? avg(losses.map(t => t.returnPct))  : 0;
+    const totalGain    = wins.reduce((s, t) => s + t.returnPct, 0);
+    const totalLoss    = Math.abs(losses.reduce((s, t) => s + t.returnPct, 0));
+    const profitFactor = totalLoss > 0 ? totalGain / totalLoss : totalGain > 0 ? 999 : 0;
+    const buhReturn    = (last(closes) - candles[0].close) / candles[0].close * 100;
+    const stratReturn  = (capital - initialCapital) / initialCapital * 100;
+    let peak = initialCapital, maxDD = 0;
+    for (const pt of equityCurve) {
+      if (pt.value > peak) peak = pt.value;
+      const dd = (peak - pt.value) / peak * 100;
+      if (dd > maxDD) maxDD = dd;
+    }
+    const markers = signals.map(s => ({
+      time:     s.date,
+      position: s.type === 'BUY' ? 'belowBar'  : 'aboveBar',
+      color:    s.type === 'BUY' ? '#00ff44'   : '#ff2244',
+      shape:    s.type === 'BUY' ? 'arrowUp'   : 'arrowDown',
+      text:     s.type === 'BUY' ? '▲ BUY'    : '▼ SELL',
+      size:     3,
+    }));
+    return { trades, markers, equityCurve, fast, slow, trend,
+      metrics: { totalTrades: closed.length, wins: wins.length, losses: losses.length,
+        winRate, avgGain, avgLoss, profitFactor, stratReturn, buhReturn, maxDD, finalCapital: capital } };
+  }
+
+  function buildEquityCurve(candles, trades, initialCapital) {
+    const curve = [];
+    let capital = initialCapital;
+    for (const candle of candles) {
+      const date = candle.time;
+      const active = trades.find(t => t.entryDate <= date && t.exitDate >= date);
+      curve.push({ time: date, value: active ? capital * (candle.close / active.entryPrice) : capital });
+      const exiting = trades.find(t => !t.open && t.exitDate === date);
+      if (exiting) capital = exiting.capitalAfter;
+    }
+    return curve;
+  }
+
+  function renderMetrics(m, initialCapital) {
+    const cards = [
+      { label: 'Strategy return',  value: pct(m.stratReturn, 1), sub: `$${(initialCapital*(1+m.stratReturn/100)).toFixed(0)} final`, color: m.stratReturn >= 0 ? 'var(--accent)' : 'var(--danger)' },
+      { label: 'Buy & hold',       value: pct(m.buhReturn, 1),   sub: 'same period',         color: m.buhReturn >= 0 ? 'var(--teal)' : 'var(--danger)' },
+      { label: 'Win rate',         value: `${fmt(m.winRate,1)}%`, sub: `${m.wins}W / ${m.losses}L`, color: m.winRate >= 50 ? 'var(--accent)' : 'var(--amber)' },
+      { label: 'Total trades',     value: String(m.totalTrades),  sub: 'completed',            color: 'var(--text)' },
+      { label: 'Avg win',          value: pct(m.avgGain, 2),      sub: 'per winning trade',    color: 'var(--accent)' },
+      { label: 'Avg loss',         value: pct(m.avgLoss, 2),      sub: 'per losing trade',     color: 'var(--danger)' },
+      { label: 'Profit factor',    value: m.profitFactor >= 999 ? '∞' : fmt(m.profitFactor,2), sub: 'gains ÷ losses', color: m.profitFactor >= 1.5 ? 'var(--accent)' : m.profitFactor >= 1 ? 'var(--amber)' : 'var(--danger)' },
+      { label: 'Max drawdown',     value: `-${fmt(m.maxDD,1)}%`,  sub: 'peak-to-trough',       color: m.maxDD < 15 ? 'var(--accent)' : m.maxDD < 30 ? 'var(--amber)' : 'var(--danger)' },
+    ];
+    document.getElementById('metric-grid').innerHTML = cards.map(c => `
+      <div class="metric-card">
+        <div class="metric-card__label">${c.label}</div>
+        <div class="metric-card__value" style="color:${c.color}">${c.value}</div>
+        <div class="metric-card__sub">${c.sub}</div>
+      </div>`).join('');
+  }
+
+  function renderTradeLog(trades) {
+    document.getElementById('trade-count').textContent =
+      `${trades.filter(t=>!t.open).length} completed trades${trades.some(t=>t.open) ? ' + 1 open' : ''}`;
+    document.getElementById('trade-tbody').innerHTML = trades.map((t, i) => `
+      <tr class="${t.open ? 'trade-open' : t.returnPct > 0 ? 'trade-win' : 'trade-loss'}">
+        <td>${i+1}</td><td>${t.entryDate}</td><td>${t.exitDate}</td>
+        <td>$${fmt(t.entryPrice)}</td><td>$${fmt(t.exitPrice)}</td>
+        <td class="ret">${pct(t.returnPct,2)}</td>
+        <td>$${fmt(t.capitalAfter)}</td>
+        <td>${t.open ? '⏳ Open' : t.returnPct > 0 ? '✓ Win' : '✗ Loss'}</td>
+      </tr>`).join('');
+  }
+
+  let btChart = null, eqChart = null;
+
+  function renderCharts(candles, result) {
+    const btEl = document.getElementById('bt-chart');
+    if (btChart) { btChart.remove(); btChart = null; }
+    btChart = LightweightCharts.createChart(btEl, {
+      width: btEl.clientWidth, height: 420,
+      layout: { background: { type: 'solid', color: '#111113' }, textColor: '#6b6b78', fontSize: 11 },
+      grid: { vertLines: { color: '#1a1a1e' }, horzLines: { color: '#1a1a1e' } },
+      rightPriceScale: { borderColor: '#222226' },
+      timeScale: { borderColor: '#222226', timeVisible: true, fixRightEdge: true },
+      crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    });
+    const candleSeries = btChart.addCandlestickSeries({ upColor: '#c8f135', downColor: '#f0604c', borderUpColor: '#c8f135', borderDownColor: '#f0604c', wickUpColor: '#7cf0c8', wickDownColor: '#f0604c' });
+    candleSeries.setData(candles);
+    candleSeries.setMarkers(result.markers);
+    const fastLine  = btChart.addLineSeries({ color: '#7cf0c8', lineWidth: 2, title: '8d EMA',  priceLineVisible: false });
+    const slowLine  = btChart.addLineSeries({ color: '#f0b84c', lineWidth: 2, title: '21d EMA', priceLineVisible: false });
+    const trendLine = btChart.addLineSeries({ color: 'rgba(107,107,120,0.6)', lineWidth: 1, lineStyle: 1, title: '50d EMA', priceLineVisible: false });
+    fastLine.setData(result.fast); slowLine.setData(result.slow); trendLine.setData(result.trend);
+    new ResizeObserver(e => { if (btChart) btChart.applyOptions({ width: e[0].contentRect.width }); }).observe(btEl);
+
+    const eqEl = document.getElementById('eq-chart');
+    if (eqChart) { eqChart.remove(); eqChart = null; }
+    eqChart = LightweightCharts.createChart(eqEl, {
+      width: eqEl.clientWidth, height: 160,
+      layout: { background: { type: 'solid', color: '#111113' }, textColor: '#6b6b78', fontSize: 10 },
+      grid: { vertLines: { color: '#1a1a1e' }, horzLines: { color: '#1a1a1e' } },
+      rightPriceScale: { borderColor: '#222226' },
+      timeScale: { borderColor: '#222226', timeVisible: false, fixRightEdge: true },
+      crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    });
+    const eqSeries = eqChart.addAreaSeries({ lineColor: '#c8f135', topColor: 'rgba(200,241,53,0.15)', bottomColor: 'rgba(200,241,53,0)', lineWidth: 2, priceLineVisible: false });
+    eqSeries.setData(result.equityCurve);
+    new ResizeObserver(e => { if (eqChart) eqChart.applyOptions({ width: e[0].contentRect.width }); }).observe(eqEl);
+  }
+
+  function renderStrategyAnalysis(metrics, trades) {
+    const m = metrics;
+    const closed = trades.filter(t => !t.open);
+    const bestTrade  = closed.length ? closed.reduce((b,t) => t.returnPct > b.returnPct ? t : b) : null;
+    const worstTrade = closed.length ? closed.reduce((b,t) => t.returnPct < b.returnPct ? t : b) : null;
+    let maxWin = 0, maxLoss = 0, cw = 0, cl = 0;
+    for (const t of closed) {
+      if (t.returnPct > 0) { cw++; cl = 0; maxWin  = Math.max(maxWin, cw); }
+      else                 { cl++; cw = 0; maxLoss = Math.max(maxLoss, cl); }
+    }
+    const verdict = m.stratReturn > m.buhReturn && m.stratReturn > 0 ? 'outperformed buy & hold'
+      : m.stratReturn > 0 ? 'was profitable but underperformed buy & hold'
+      : 'underperformed buy & hold';
+    const verdictColor = m.stratReturn > m.buhReturn && m.stratReturn > 0 ? 'var(--accent)'
+      : m.stratReturn > 0 ? 'var(--amber)' : 'var(--danger)';
+
+    document.getElementById('bt-analysis-content').innerHTML = `
+      <div style="padding:16px 20px;background:var(--bg);border:1px solid var(--border);border-left:3px solid ${verdictColor};border-radius:0 4px 4px 0;margin-bottom:20px">
+        <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:8px">Verdict</div>
+        <div style="font-size:0.88rem;color:var(--text);line-height:1.75">
+          The strategy <strong style="color:${verdictColor}">${verdict}</strong> this period.
+          It returned <strong style="color:${m.stratReturn>=0?'var(--accent)':'var(--danger)'}">${pct(m.stratReturn,1)}</strong> vs
+          buy &amp; hold's <strong style="color:${m.buhReturn>=0?'var(--teal)':'var(--danger)'}">${pct(m.buhReturn,1)}</strong>.
+          ${m.totalTrades === 0
+            ? 'No completed trades were generated — the 50d EMA trend filter may have blocked entries. Try a longer period.'
+            : `Across ${m.totalTrades} completed trade${m.totalTrades!==1?'s':''}, the win rate was
+               <strong style="color:var(--text)">${fmt(m.winRate,1)}%</strong> with a profit factor of
+               <strong style="color:${m.profitFactor>=1.5?'var(--accent)':m.profitFactor>=1?'var(--amber)':'var(--danger)'}">${m.profitFactor>=999?'∞':fmt(m.profitFactor,2)}</strong>
+               — ${m.profitFactor>=1.5?'a strong edge.':m.profitFactor>=1?'a marginal edge.':'negative expectancy this period.'}`}
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+        <div style="padding:16px;background:var(--bg);border:1px solid var(--border);border-radius:4px">
+          <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:10px">Win / Loss Breakdown</div>
+          <div style="display:flex;flex-direction:column;gap:6px;font-size:0.82rem;color:var(--muted)">
+            <div><span style="color:var(--text)">Win rate:</span> ${fmt(m.winRate,1)}% (${m.wins}W / ${m.losses}L)</div>
+            <div><span style="color:var(--text)">Avg win:</span> <span style="color:var(--accent)">${pct(m.avgGain,2)}</span></div>
+            <div><span style="color:var(--text)">Avg loss:</span> <span style="color:var(--danger)">${pct(m.avgLoss,2)}</span></div>
+            <div><span style="color:var(--text)">Best win streak:</span> ${maxWin} trade${maxWin!==1?'s':''}</div>
+            <div><span style="color:var(--text)">Worst loss streak:</span> ${maxLoss} trade${maxLoss!==1?'s':''}</div>
+          </div>
+        </div>
+        <div style="padding:16px;background:var(--bg);border:1px solid var(--border);border-radius:4px">
+          <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:10px">Risk Metrics</div>
+          <div style="display:flex;flex-direction:column;gap:6px;font-size:0.82rem;color:var(--muted)">
+            <div><span style="color:var(--text)">Max drawdown:</span> <span style="color:var(--danger)">-${fmt(m.maxDD,1)}%</span></div>
+            <div><span style="color:var(--text)">Profit factor:</span> <span style="color:${m.profitFactor>=1.5?'var(--accent)':m.profitFactor>=1?'var(--amber)':'var(--danger)'}">${m.profitFactor>=999?'∞':fmt(m.profitFactor,2)}</span></div>
+            <div><span style="color:var(--text)">Strategy vs B&amp;H:</span> <span style="color:${m.stratReturn>=m.buhReturn?'var(--accent)':'var(--muted)'}">${m.stratReturn>=m.buhReturn?'Outperformed ↑':'Underperformed ↓'}</span></div>
+            <div><span style="color:var(--text)">Filter applied:</span> 50d EMA + RSI ≥ 35</div>
+          </div>
+        </div>
+      </div>
+
+      ${bestTrade || worstTrade ? `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        ${bestTrade ? `<div style="padding:16px;background:rgba(0,255,68,0.05);border:1px solid rgba(0,255,68,0.2);border-radius:4px">
+          <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:8px">Best Trade</div>
+          <div style="font-size:1.4rem;font-weight:700;color:#00ff44;margin-bottom:4px">${pct(bestTrade.returnPct,2)}</div>
+          <div style="font-size:0.78rem;color:var(--muted)">${bestTrade.entryDate} → ${bestTrade.exitDate}</div>
+          <div style="font-size:0.78rem;color:var(--muted)">$${fmt(bestTrade.entryPrice)} → $${fmt(bestTrade.exitPrice)}</div>
+        </div>` : ''}
+        ${worstTrade ? `<div style="padding:16px;background:rgba(255,34,68,0.05);border:1px solid rgba(255,34,68,0.2);border-radius:4px">
+          <div style="font-size:0.62rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:8px">Worst Trade</div>
+          <div style="font-size:1.4rem;font-weight:700;color:#ff2244;margin-bottom:4px">${pct(worstTrade.returnPct,2)}</div>
+          <div style="font-size:0.78rem;color:var(--muted)">${worstTrade.entryDate} → ${worstTrade.exitDate}</div>
+          <div style="font-size:0.78rem;color:var(--muted)">$${fmt(worstTrade.entryPrice)} → $${fmt(worstTrade.exitPrice)}</div>
+        </div>` : ''}
+      </div>` : ''}`;
+    document.getElementById('bt-analysis').style.display = 'block';
+  }
+
+  document.getElementById('bt-run-btn').addEventListener('click', async () => {
+    const ticker  = document.getElementById('bt-ticker').value.trim().toUpperCase();
+    const period  = document.getElementById('bt-period').value;
+    const fastP   = 8, slowP = 21, maType = 'EMA';
+    const capital = parseFloat(document.getElementById('bt-capital').value) || 10000;
+
+    if (!ticker) { alert('Please enter a ticker symbol.'); return; }
+
+    document.getElementById('bt-label').style.display   = 'none';
+    document.getElementById('bt-spinner').style.display = 'inline-block';
+    document.getElementById('bt-results').style.display = 'none';
+    const errEl = document.getElementById('bt-error');
+    errEl.style.display = 'none'; errEl.textContent = '';
+
+    try {
+      const json = await fetchJSON(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=${period}`);
+      const raw  = json?.chart?.result?.[0];
+      if (!raw) throw new Error('No data returned');
+      const q = raw.indicators.quote[0], ts = raw.timestamp;
+      const candles = [];
+      for (let i = 0; i < ts.length; i++) {
+        if (q.close[i] == null || q.open[i] == null) continue;
+        candles.push({ time: new Date(ts[i]*1000).toISOString().slice(0,10), open: q.open[i], high: q.high[i], low: q.low[i], close: q.close[i] });
+      }
+      if (candles.length < slowP + 5) throw new Error(`Need at least ${slowP + 5} data points. Try a longer period.`);
+      const result = runBacktest(candles, fastP, slowP, maType, capital);
+      const periodLabels = { '1y':'1 Year', '2y':'2 Years', '5y':'5 Years', 'max':'Max' };
+      document.getElementById('bt-title').textContent = `${ticker} — Pulse Score Strategy`;
+      document.getElementById('bt-period-label').textContent = `${periodLabels[period] ?? period} · ${candles.length} trading days · ${candles[0].time} → ${last(candles).time}`;
+      document.getElementById('eq-start').textContent = capital.toLocaleString();
+      renderMetrics(result.metrics, capital);
+      renderCharts(candles, result);
+      renderTradeLog(result.trades);
+      renderStrategyAnalysis(result.metrics, result.trades);
+      document.getElementById('bt-results').style.display = 'block';
+    } catch (err) {
+      console.error(err);
+      const errEl = document.getElementById('bt-error');
+      errEl.textContent = `⚠ ${err.message}`;
+      errEl.style.display = 'block';
+    } finally {
+      document.getElementById('bt-label').style.display   = 'inline';
+      document.getElementById('bt-spinner').style.display = 'none';
+    }
+  });
+
+  document.getElementById('bt-ticker').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('bt-run-btn').click();
+  });
+
+  </script>
+</Base>
